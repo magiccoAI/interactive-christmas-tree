@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Christmas Tree | AI & WebGL Experience</title>
     
+    <link rel="icon" href="data:,">
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Times+New+Roman&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -46,6 +47,7 @@
             margin-bottom: 0;
             background: linear-gradient(to bottom, #ffffff 0%, var(--color-gold) 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
             letter-spacing: 2px;
@@ -65,22 +67,25 @@
         }
 
         .btn-upload {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--color-gold);
-            color: var(--color-gold);
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(212, 175, 55, 0.7);
+            color: var(--color-cream);
             padding: 12px 30px;
-            font-family: 'Cinzel', serif;
-            font-size: 16px;
+            font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            font-weight: 300;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.25s ease;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
+            border-radius: 999px;
         }
 
         .btn-upload:hover {
-            background: rgba(212, 175, 55, 0.2);
-            box-shadow: 0 0 15px var(--color-gold);
+            background: rgba(212, 175, 55, 0.12);
+            box-shadow: 0 0 22px rgba(212, 175, 55, 0.7);
+            transform: translateY(-1px);
         }
 
         .hint-text {
@@ -129,17 +134,54 @@
             opacity: 0;
             pointer-events: none !important;
         }
-
-        /* --- Webcam (Hidden) --- */
-        #webcam-container {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            opacity: 0; /* Hidden as requested */
-            pointer-events: none;
-        }
         
         #input-file { display: none; }
+
+        /* --- Webcam UI --- */
+        #video-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror */
+        }
+
+        #cv-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror */
+        }
+
+        #gesture-status {
+            position: absolute;
+            bottom: 150px;
+            right: 20px;
+            color: var(--color-gold);
+            font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            text-align: right;
+            text-shadow: 0 2px 4px #000;
+            pointer-events: auto;
+            z-index: 20;
+            cursor: pointer;
+            opacity: 0.9;
+        }
+
+
     </style>
 
     <!-- Import Map -->
@@ -147,8 +189,7 @@
     {
         "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-            "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm"
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
         }
     }
     </script>
@@ -165,6 +206,13 @@
     <div id="ui-container">
         <h1>Merry Christmas</h1>
 
+        <!-- Webcam UI -->
+        <div id="video-container">
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="cv-canvas"></canvas>
+        </div>
+        <div id="gesture-status"></div>
+
         <div class="upload-wrapper">
             <button class="btn-upload" onclick="document.getElementById('input-file').click()">
                 Add Memories
@@ -174,26 +222,19 @@
             </button>
             <input type="file" id="input-file" accept="image/*">
             <div class="hint-text">Press 'H' to Hide Controls</div>
-            <div class="hint-text" id="gesture-status">AI Status: Initializing...</div>
         </div>
-    </div>
-
-    <!-- CV Hidden Container -->
-    <div id="webcam-container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="cv-canvas" width="160" height="120"></canvas>
     </div>
 
     <!-- Main Application -->
     <script type="module">
         import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+        // Import MediaPipe directly from CDN with full path to verify loading
+        import { FilesetResolver, HandLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm';
 
         // --- Configuration ---
         const CONFIG = {
@@ -227,7 +268,7 @@
             mode: MODES.TREE,
             targetMode: MODES.TREE,
             focusTarget: null,
-            handRotation: { x: 0, y: 0 }
+            tilt: { x: 0, y: 0 } // Renamed from handRotation to tilt
         };
 
         // --- Utils ---
@@ -288,10 +329,7 @@
                 }
 
                 // Scale Animation (Twinkle/Pulse)
-                const pulse = Math.sin(time * 3 + this.phase) * 0.15; // ±15% scale
-                const animatedScale = this.targetScale.clone().multiplyScalar(1 + pulse);
-                
-                this.mesh.scale.lerp(animatedScale, lerpSpeed);
+                this.mesh.scale.lerp(this.targetScale, lerpSpeed);
             }
 
             setFocus(isTarget) {
@@ -490,7 +528,7 @@
                 this.generateContent();
                 this.initSnow();
                 this.initEvents();
-                this.initMediaPipe();
+                // this.initMediaPipe(); // Removed auto-init to wait for user interaction or camera ready
                 
                 this.animate();
             }
@@ -517,21 +555,26 @@
                 this.mainGroup = new THREE.Group();
                 this.scene.add(this.mainGroup);
 
-                // Reflective Ground Floor
+                // Reflective Ground Floor - Dimmed Further
                 const groundGeo = new THREE.CircleGeometry(60, 64);
                 const groundMat = new THREE.MeshPhysicalMaterial({ 
-                    color: 0x111111,
-                    metalness: 0.9,
-                    roughness: 0.1,
-                    clearcoat: 1.0,
-                    reflectivity: 1.0,
-                    side: THREE.DoubleSide
+                    color: 0x000000, // Pure Black
+                    metalness: 0.2,  // Low metalness
+                    roughness: 0.5,  // Matte
+                    clearcoat: 0.1,  // Very slight shine
+                    reflectivity: 0.1,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.6
                 });
                 const ground = new THREE.Mesh(groundGeo, groundMat);
                 ground.rotation.x = -Math.PI / 2;
                 ground.position.y = -26; // Below the tree
                 ground.receiveShadow = true;
                 this.scene.add(ground);
+
+                // Orbit Controls removed for exclusive gesture interaction
+
             }
 
             initLights() {
@@ -613,47 +656,47 @@
                     }),
                     greenPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.green,
-                        metalness: 0.8,
-                        roughness: 0.1,
-                        clearcoat: 1.0,
-                        clearcoatRoughness: 0.1,
+                        metalness: 0.7,
+                        roughness: 0.25,
+                        clearcoat: 0.8,
+                        clearcoatRoughness: 0.25,
                         emissive: 0x002200,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: 0.08
                     }),
                     bluePhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.blue,
-                        metalness: 0.9,
-                        roughness: 0.05,
-                        clearcoat: 1.0,
-                        clearcoatRoughness: 0.1,
+                        metalness: 0.8,
+                        roughness: 0.25,
+                        clearcoat: 0.8,
+                        clearcoatRoughness: 0.25,
                         emissive: 0x000044,
-                        emissiveIntensity: 0.4
+                        emissiveIntensity: 0.15
                     }),
                     redPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.red,
-                        metalness: 0.8,
-                        roughness: 0.1,
-                        clearcoat: 1.0,
-                        clearcoatRoughness: 0.1,
+                        metalness: 0.75,
+                        roughness: 0.28,
+                        clearcoat: 0.8,
+                        clearcoatRoughness: 0.3,
                         emissive: 0x330000,
-                        emissiveIntensity: 0.3
+                        emissiveIntensity: 0.1
                     }),
                     goldPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.gold,
-                        metalness: 1.0,
-                        roughness: 0.0,
-                        clearcoat: 1.0,
-                        clearcoatRoughness: 0.0,
+                        metalness: 0.9,
+                        roughness: 0.28,
+                        clearcoat: 0.9,
+                        clearcoatRoughness: 0.3,
                         emissive: CONFIG.colors.gold,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: 0.06
                     }),
                     silverPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.silver,
-                        metalness: 1.0,
-                        roughness: 0.1,
-                        clearcoat: 1.0,
+                        metalness: 0.9,
+                        roughness: 0.3,
+                        clearcoat: 0.9,
                         emissive: 0x111111,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: 0.08
                     }),
                     candy: new THREE.MeshStandardMaterial({
                         map: this.createCandyTexture(),
@@ -762,32 +805,30 @@
                     let mesh;
                     const r = Math.random();
 
-                    if (r < 0.3) { // Increased chance for ornaments
-                        // Ornaments (Spheres) - Red, Gold, Blue, Silver, Green
+                    if (r < 0.3) {
                         const randColor = Math.random();
                         let mat;
                         if (randColor < 0.2) mat = this.materials.redPhysical;
-                        else if (randColor < 0.4) mat = this.materials.goldPhysical;
-                        else if (randColor < 0.6) mat = this.materials.bluePhysical;
-                        else if (randColor < 0.8) mat = this.materials.silverPhysical;
-                        else mat = this.materials.greenPhysical; // Added Green
+                        else if (randColor < 0.3) mat = this.materials.goldPhysical;
+                        else if (randColor < 0.5) mat = this.materials.bluePhysical;
+                        else if (randColor < 0.6) mat = this.materials.silverPhysical;
+                        else mat = this.materials.greenPhysical;
                         
                         mesh = new THREE.Mesh(geometries.sphere, mat);
                     } else if (r < 0.5) {
-                        // Diamonds (Gold, Blue, Silver)
                         const randD = Math.random();
                         let mat;
-                        if(randD < 0.4) mat = this.materials.goldPhysical;
-                        else if(randD < 0.7) mat = this.materials.bluePhysical;
-                        else mat = this.materials.silverPhysical;
+                        if(randD < 0.25) mat = this.materials.goldPhysical;
+                        else if(randD < 0.6) mat = this.materials.bluePhysical;
+                        else if(randD < 0.8) mat = this.materials.silverPhysical;
+                        else mat = this.materials.greenPhysical;
 
                         mesh = new THREE.Mesh(geometries.diamond, mat);
                     } else if (r < 0.65) {
-                        // Stars (Green, Gold, Blue)
                         const randStar = Math.random();
                         let mat;
-                        if (randStar < 0.33) mat = this.materials.gold;
-                        else if (randStar < 0.66) mat = this.materials.green;
+                        if (randStar < 0.15) mat = this.materials.gold;
+                        else if (randStar < 0.7) mat = this.materials.green;
                         else mat = this.materials.bluePhysical;
 
                         mesh = new THREE.Mesh(geometries.star, mat);
@@ -826,6 +867,146 @@
 
                 // 4. Default Photo
                 this.addPhotoByText("HELLO");
+            }
+
+            // --- Camera & Gesture Setup ---
+            async setupCamera() {
+                if(this.webcamRunning) return;
+                
+                const video = document.getElementById('webcam');
+                const constraints = { video: { facingMode: "user", width: 320, height: 240 } };
+                
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    video.srcObject = stream;
+                    video.addEventListener('loadeddata', () => { 
+                        this.webcamRunning = true; 
+                        document.getElementById('gesture-status').textContent = "Camera Active. Loading AI...";
+                        // Video container is hidden by CSS but active
+                        
+                        this.initMediaPipe();
+                    });
+                } catch (err) { 
+                    console.warn("Webcam access denied", err); 
+                    const statusEl = document.getElementById('gesture-status');
+                    if (statusEl) {
+                        if (err && err.name === 'NotReadableError') {
+                            statusEl.textContent = "Camera is used by another app. Close it and refresh.";
+                        } else if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+                            statusEl.textContent = "Camera permission blocked. Please allow access in browser settings.";
+                        } else {
+                            statusEl.textContent = "Camera error. Check settings or try another browser.";
+                        }
+                    }
+                }
+            }
+
+            async initMediaPipe() {
+                if (this.handLandmarker) return;
+
+                try {
+                    const vision = await FilesetResolver.forVisionTasks(
+                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                    );
+                    this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                        baseOptions: {
+                            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+                            delegate: "GPU"
+                        },
+                        runningMode: "VIDEO",
+                        numHands: 1
+                    });
+                    document.getElementById('gesture-status').textContent = "AI Ready! Show Hand to Control";
+                } catch (e) {
+                    console.error("MediaPipe failed:", e);
+                    document.getElementById('gesture-status').textContent = "AI Load Failed.";
+                }
+            }
+
+            processGestures() {
+                if (!this.handLandmarker || !this.webcamRunning) return;
+                
+                
+                const video = document.getElementById('webcam');
+                const canvas = document.getElementById('cv-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (video.currentTime !== this.lastVideoTime) {
+                    this.lastVideoTime = video.currentTime;
+                    const results = this.handLandmarker.detectForVideo(video, performance.now());
+                    
+                    if (results.landmarks && results.landmarks.length > 0) {
+                        const lm = results.landmarks[0];
+                        
+                        // Draw Landmarks
+                        ctx.fillStyle = "#00FF00";
+                        for (const p of lm) {
+                            ctx.beginPath();
+                            ctx.arc(p.x * canvas.width, p.y * canvas.height, 2, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+
+                        // --- Interaction Logic ---
+                        // 1. Rotation Control (Joystick Style)
+                        // Hand X Center = 0.5
+                        const x = lm[9].x; // Middle finger MCP as center
+                        const y = lm[9].y;
+                        
+                        const deadzone = 0.15;
+                        const center = 0.5;
+                        let rotSpeed = 0;
+                        
+                        // Joystick Logic: Move hand Left/Right to spin
+                        if (x < center - deadzone) {
+                            // Left -> Spin Left
+                            rotSpeed = -0.05 * ((center - deadzone - x) / (center - deadzone)); 
+                        } else if (x > center + deadzone) {
+                            // Right -> Spin Right
+                            rotSpeed = 0.05 * ((x - (center + deadzone)) / (center - deadzone));
+                        }
+                        
+                        this.mainGroup.rotation.y += rotSpeed; 
+
+                        // 2. Tilt Control (Direct Map)
+                        // Y 0(top) to 1(bottom) -> Tilt Up/Down
+                        const targetTiltX = (y - 0.5) * 1.0; 
+                        this.mainGroup.rotation.x = THREE.MathUtils.lerp(this.mainGroup.rotation.x, targetTiltX, 0.1);
+
+                        // 3. Mode Switching (Gestures)
+                        const thumb = lm[4]; const index = lm[8]; const wrist = lm[0];
+                        const scale = Math.hypot(lm[5].x - wrist.x, lm[5].y - wrist.y) || 0.1; // Hand size
+                        const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y) / scale;
+                        
+                        // Calculate finger extension
+                        const tips = [8, 12, 16, 20];
+                        const mcps = [5, 9, 13, 17];
+                        let extensionSum = 0;
+                        for(let i=0; i<4; i++) {
+                            extensionSum += Math.hypot(lm[tips[i]].x - lm[mcps[i]].x, lm[tips[i]].y - lm[mcps[i]].y);
+                        }
+                        const extensionRatio = (extensionSum / 4) / scale;
+
+                        let newMode = STATE.mode;
+                        let status = "🖐 Move Hand L/R to Spin";
+
+                        if (pinchDist < 0.4) {
+                            newMode = MODES.FOCUS;
+                            status = "👌 Pinch: Focus";
+                        } else if (extensionRatio < 1.0) { 
+                            newMode = MODES.TREE;
+                            status = "✊ Fist: Restore Tree";
+                        } else if (extensionRatio > 2.0) { 
+                            newMode = MODES.SCATTER;
+                            status = "🖐 Open: Scatter";
+                        }
+
+                        document.getElementById('gesture-status').textContent = status;
+                        if (newMode !== STATE.mode) this.updateLayout(newMode);
+                    }
+                }
             }
 
             addPhotoByText(text) {
@@ -906,83 +1087,7 @@
                 }
             }
 
-            async initMediaPipe() {
-                try {
-                    const vision = await FilesetResolver.forVisionTasks(
-                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-                    );
-                    this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                            delegate: "GPU"
-                        },
-                        runningMode: "VIDEO",
-                        numHands: 1
-                    });
-                    this.setupCamera();
-                    document.getElementById('gesture-status').textContent = "AI Ready! Use gestures.";
-                } catch (e) {
-                    console.error("MediaPipe failed:", e);
-                    document.getElementById('gesture-status').textContent = "AI Failed. Mouse Only.";
-                }
-            }
 
-            async setupCamera() {
-                const video = document.getElementById('webcam');
-                const constraints = { video: { width: 160, height: 120 } };
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    video.srcObject = stream;
-                    video.addEventListener('loadeddata', () => { this.webcamRunning = true; });
-                } catch (err) { console.warn("Webcam access denied"); }
-            }
-
-            processGestures() {
-                if (!this.handLandmarker || !this.webcamRunning) return;
-                const video = document.getElementById('webcam');
-                if (video.currentTime !== this.lastVideoTime) {
-                    this.lastVideoTime = video.currentTime;
-                    const results = this.handLandmarker.detectForVideo(video, performance.now());
-                    if (results.landmarks && results.landmarks.length > 0) {
-                        const lm = results.landmarks[0];
-                        const x = lm[9].x; const y = lm[9].y;
-                        STATE.handRotation.y = (x - 0.5) * -3; 
-                        STATE.handRotation.x = (y - 0.5) * -2;
-
-                        const thumb = lm[4]; const index = lm[8]; const wrist = lm[0];
-                        const indexMCP = lm[5];
-                        const tips = [lm[8], lm[12], lm[16], lm[20]];
-                        
-                        // Calculate scale (Wrist to Index Knuckle) for distance invariance
-                        const scale = Math.hypot(indexMCP.x - wrist.x, indexMCP.y - wrist.y) || 0.1;
-                        
-                        const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
-                        
-                        let avgTipDist = 0;
-                        tips.forEach(t => { avgTipDist += Math.hypot(t.x - wrist.x, t.y - wrist.y); });
-                        avgTipDist /= 4;
-                        
-                        // Normalize distances
-                        const extensionRatio = avgTipDist / scale;
-                        const normalizedPinch = pinchDist / scale;
-
-                        let newMode = STATE.mode;
-                        
-                        // Logic: 
-                        // Pinch -> Focus
-                        // Fist (Small Extension) -> Gather/Tree
-                        // Open Hand (Large Extension) -> Scatter
-                        if (normalizedPinch < 0.3) {
-                             newMode = MODES.FOCUS;
-                        } else {
-                            if (extensionRatio < 1.3) newMode = MODES.TREE;      // Fist
-                            else if (extensionRatio > 1.8) newMode = MODES.SCATTER; // Open
-                        }
-
-                        if (newMode !== STATE.mode) this.updateLayout(newMode);
-                    }
-                }
-            }
 
             initEvents() {
                 window.addEventListener('resize', () => {
@@ -991,7 +1096,24 @@
                     this.renderer.setSize(window.innerWidth, window.innerHeight);
                     this.composer.setSize(window.innerWidth, window.innerHeight);
                 });
+                
+
+
                 document.getElementById('input-file').addEventListener('change', (e) => this.handleImageUpload(e));
+
+                const gestureStatus = document.getElementById('gesture-status');
+                if (gestureStatus) {
+                    gestureStatus.textContent = "Tap here to enable gesture control";
+                    const startGesture = () => {
+                        gestureStatus.textContent = "⌛ Starting Gesture Control...";
+                        this.setupCamera();
+                        gestureStatus.removeEventListener('click', startGesture);
+                        gestureStatus.removeEventListener('touchstart', startGesture);
+                    };
+                    gestureStatus.addEventListener('click', startGesture, { passive: true });
+                    gestureStatus.addEventListener('touchstart', startGesture, { passive: true });
+                }
+
                 document.getElementById('btn-reset').addEventListener('click', () => {
                     this.updateLayout(MODES.TREE);
                 });
@@ -1009,17 +1131,23 @@
             animate() {
                 requestAnimationFrame(() => this.animate());
                 const time = this.clock.getElapsedTime();
-                this.processGestures();
+                
                 if(this.snowSystem) this.snowSystem.update();
                 this.particles.forEach(p => p.update(STATE.mode, time));
-                this.mainGroup.rotation.y += 0.001;
-                this.mainGroup.rotation.y += (STATE.handRotation.y - this.mainGroup.rotation.y) * 0.05;
-                this.mainGroup.rotation.x += (STATE.handRotation.x - this.mainGroup.rotation.x) * 0.05;
+                
+                // Process Gestures if active
+                if (this.webcamRunning) {
+                    this.processGestures();
+                } else {
+                    // Idle animation: Slow spin when not controlled
+                    this.mainGroup.rotation.y += 0.001;
+                }
+
                 this.composer.render();
             }
         }
 
-        new ChristmasExperience();
+        window.app = new ChristmasExperience();
 
     </script>
 </body>
