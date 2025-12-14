@@ -323,14 +323,19 @@
 
     <!-- UI Overlay -->
     <div id="ui-container">
-        <h1>Merry Christmas</h1>
+        <h1 data-i18n="title">Merry Christmas</h1>
+        
+        <!-- Language Switcher -->
+        <button id="btn-lang" style="position:absolute; top:20px; right:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.3); color:white; padding:5px 10px; border-radius:15px; cursor:pointer; font-size:12px; backdrop-filter:blur(4px); z-index:30; pointer-events:auto;">
+            EN / 中文
+        </button>
 
         <!-- Webcam UI -->
         <div id="video-container">
             <video id="webcam" autoplay playsinline></video>
             <canvas id="cv-canvas"></canvas>
         </div>
-        <div id="gesture-status"></div>
+        <div id="gesture-status" data-i18n="gestureStart">Tap here to enable gesture control</div>
 
         <button id="btn-sound" class="btn-sound" title="Toggle Sound">🔇</button>
 
@@ -341,18 +346,18 @@
         </div>
 
         <div class="upload-wrapper">
-            <button class="btn-upload" onclick="document.getElementById('input-file').click()">
+            <button class="btn-upload" onclick="document.getElementById('input-file').click()" data-i18n="addMemories">
                 Add Memories
             </button>
-            <button class="btn-upload" id="btn-reset">
+            <button class="btn-upload" id="btn-reset" data-i18n="restoreTree">
                 Restore Tree
             </button>
             <input type="file" id="input-file" accept="image/*">
-            <div class="hint-text">Press 'H' to Hide Controls</div>
+            <div class="hint-text" data-i18n="hintHide">Press 'H' to Hide Controls</div>
         </div>
     </div>
 
-    <div id="mobile-menu-toggle">☰</div>
+    <div id="mobile-menu-toggle" role="button" aria-label="Toggle Menu Visibility" title="Toggle Menu">☰</div>
 
     <!-- Main Application -->
     <script type="module">
@@ -399,6 +404,67 @@
             focusTarget: null,
             tilt: { x: 0, y: 0 } // Renamed from handRotation to tilt
         };
+
+        const I18N = {
+            en: {
+                title: "Merry Christmas",
+                loading: "LOADING HOLIDAY MAGIC",
+                gestureStart: "Tap here to enable gesture control",
+                gestureLoading: "⌛ Starting Gesture Control...",
+                addMemories: "Add Memories",
+                restoreTree: "Restore Tree",
+                hintHide: "Press 'H' to Hide Controls",
+                httpsWarning: "⚠️ For full experience (Audio & Camera), please use <strong>HTTPS</strong>.",
+                httpsDismiss: "Dismiss",
+                modeTree: "Tree Mode",
+                modeScatter: "Scatter Mode",
+                modeFocus: "Focus Mode",
+                soundToggle: "Toggle Sound",
+                mobileMenu: "Toggle Menu",
+                // Gesture Status
+                gestureAIReady: "AI Ready! Show Hand to Control",
+                gestureAIFailed: "AI Load Failed.",
+                gestureCameraHTTPS: "⚠️ Camera requires HTTPS or Localhost",
+                gestureCameraActive: "Camera Active. Loading AI...",
+                gestureCameraUsed: "Camera is used by another app. Close it and refresh.",
+                gestureCameraBlocked: "Camera permission blocked. Please allow access in browser settings.",
+                gestureCameraError: "Camera error. Check settings or try another browser.",
+                gestureMove: "🖐 Move Hand L/R to Spin",
+                gesturePinch: "👌 Pinch: Focus",
+                gestureFist: "✊ Fist: Restore Tree",
+                gestureOpen: "🖐 Open: Scatter"
+            },
+            zh: {
+                title: "圣诞快乐",
+                loading: "正在加载节日魔法...",
+                gestureStart: "点击此处开启手势控制",
+                gestureLoading: "⌛ 正在启动手势控制...",
+                addMemories: "添加美好回忆",
+                restoreTree: "重置圣诞树",
+                hintHide: "按 'H' 键隐藏控制界面",
+                httpsWarning: "⚠️ 为了获得完整体验（音频和摄像头），请使用 <strong>HTTPS</strong> 访问。",
+                httpsDismiss: "关闭",
+                modeTree: "圣诞树模式",
+                modeScatter: "散落模式",
+                modeFocus: "聚焦模式",
+                soundToggle: "开关声音",
+                mobileMenu: "切换菜单",
+                // Gesture Status
+                gestureAIReady: "AI 就绪！请展示手势控制",
+                gestureAIFailed: "AI 加载失败。",
+                gestureCameraHTTPS: "⚠️ 摄像头需要 HTTPS 或 Localhost",
+                gestureCameraActive: "摄像头已激活，正在加载 AI...",
+                gestureCameraUsed: "摄像头被其他应用占用，请关闭后刷新。",
+                gestureCameraBlocked: "摄像头权限被拒绝，请在浏览器设置中允许。",
+                gestureCameraError: "摄像头错误，请检查设置或更换浏览器。",
+                gestureMove: "🖐 左右移动手掌旋转",
+                gesturePinch: "👌 捏合：聚焦",
+                gestureFist: "✊ 握拳：重置",
+                gestureOpen: "🖐 张开：散落"
+            }
+        };
+
+        let currentLang = 'en';
 
         // --- Utils ---
         const randFloat = (min, max) => Math.random() * (max - min) + min;
@@ -1364,7 +1430,7 @@
                 // HTTPS Check
                 if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
                     const statusEl = document.getElementById('gesture-status');
-                    if (statusEl) statusEl.textContent = "⚠️ Camera requires HTTPS or Localhost";
+                    if (statusEl) statusEl.textContent = I18N[currentLang].gestureCameraHTTPS;
                     console.warn("Camera requires Secure Context (HTTPS)");
                     return;
                 }
@@ -1378,7 +1444,7 @@
                     video.addEventListener('loadeddata', () => { 
                         this.webcamRunning = true; 
                         const statusEl = document.getElementById('gesture-status');
-                        if (statusEl) statusEl.textContent = "Camera Active. Loading AI...";
+                        if (statusEl) statusEl.textContent = I18N[currentLang].gestureCameraActive;
                         const canvas = document.getElementById('cv-canvas');
                         if (canvas) {
                             canvas.width = video.videoWidth || 320;
@@ -1395,11 +1461,11 @@
                     const statusEl = document.getElementById('gesture-status');
                     if (statusEl) {
                         if (err && err.name === 'NotReadableError') {
-                            statusEl.textContent = "Camera is used by another app. Close it and refresh.";
+                            statusEl.textContent = I18N[currentLang].gestureCameraUsed;
                         } else if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
-                            statusEl.textContent = "Camera permission blocked. Please allow access in browser settings.";
+                            statusEl.textContent = I18N[currentLang].gestureCameraBlocked;
                         } else {
-                            statusEl.textContent = "Camera error. Check settings or try another browser.";
+                            statusEl.textContent = I18N[currentLang].gestureCameraError;
                         }
                     }
                 }
@@ -1420,11 +1486,11 @@
                         runningMode: "VIDEO",
                         numHands: 1
                     });
-                    document.getElementById('gesture-status').textContent = "AI Ready! Show Hand to Control";
+                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
                     if(this.soundManager) this.soundManager.playSuccess();
                 } catch (e) {
                     console.error("MediaPipe failed:", e);
-                    document.getElementById('gesture-status').textContent = "AI Load Failed.";
+                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIFailed;
                 }
             }
 
@@ -1495,17 +1561,17 @@
                         const extensionRatio = (extensionSum / 4) / scale;
 
                         let newMode = STATE.mode;
-                        let status = "🖐 Move Hand L/R to Spin";
+                        let status = I18N[currentLang].gestureMove;
 
                         if (pinchDist < 0.4) {
                             newMode = MODES.FOCUS;
-                            status = "👌 Pinch: Focus";
+                            status = I18N[currentLang].gesturePinch;
                         } else if (extensionRatio < 1.0) { 
                             newMode = MODES.TREE;
-                            status = "✊ Fist: Restore Tree";
+                            status = I18N[currentLang].gestureFist;
                         } else if (extensionRatio > 2.0) { 
                             newMode = MODES.SCATTER;
-                            status = "🖐 Open: Scatter";
+                            status = I18N[currentLang].gestureOpen;
                         }
 
                         document.getElementById('gesture-status').textContent = status;
@@ -1744,7 +1810,73 @@
                 // HTTPS Check
                 if (!window.isSecureContext) {
                     const warning = document.getElementById('https-warning');
-                    if(warning) warning.style.display = 'block';
+                    if(warning) {
+                        warning.innerHTML = I18N[currentLang].httpsWarning + 
+                            `<button onclick="this.parentElement.style.display='none'" style="background:none; border:1px solid white; color:white; padding:2px 8px; border-radius:4px; margin-left:10px; cursor:pointer; font-size:12px;">${I18N[currentLang].httpsDismiss}</button>`;
+                        warning.style.display = 'block';
+                    }
+                }
+
+                // Language Switcher Logic
+                const btnLang = document.getElementById('btn-lang');
+                if (btnLang) {
+                    btnLang.addEventListener('click', () => {
+                        currentLang = currentLang === 'en' ? 'zh' : 'en';
+                        this.updateLanguage();
+                    });
+                }
+                // Initial Language Update (optional if default matches HTML)
+                // this.updateLanguage();
+            }
+
+            updateLanguage() {
+                const t = I18N[currentLang];
+                
+                // Update text content elements
+                document.querySelectorAll('[data-i18n]').forEach(el => {
+                    const key = el.dataset.i18n;
+                    if (t[key]) el.textContent = t[key];
+                });
+
+                // Special cases (Titles, Attributes, HTML)
+                const btnSound = document.getElementById('btn-sound');
+                if(btnSound) btnSound.title = t.soundToggle;
+
+                const modeBtns = document.querySelectorAll('.btn-mode');
+                if(modeBtns.length > 0) {
+                    modeBtns[0].title = t.modeTree;
+                    modeBtns[1].title = t.modeScatter;
+                    modeBtns[2].title = t.modeFocus;
+                }
+                
+                const mobileToggle = document.getElementById('mobile-menu-toggle');
+                if(mobileToggle) {
+                    mobileToggle.title = t.mobileMenu;
+                    mobileToggle.setAttribute('aria-label', t.mobileMenu);
+                }
+
+                // Loading Text (if still visible)
+                const loadingText = document.querySelector('.loading-text');
+                if(loadingText) loadingText.textContent = t.loading;
+
+                // HTTPS Warning (Re-render to update text)
+                const warning = document.getElementById('https-warning');
+                if(warning && warning.style.display !== 'none') {
+                    warning.innerHTML = t.httpsWarning + 
+                        `<button onclick="this.parentElement.style.display='none'" style="background:none; border:1px solid white; color:white; padding:2px 8px; border-radius:4px; margin-left:10px; cursor:pointer; font-size:12px;">${t.httpsDismiss}</button>`;
+                }
+
+                // Gesture Status (Handle dynamic state)
+                const gestureStatus = document.getElementById('gesture-status');
+                if(gestureStatus) {
+                     // Check if we are in "loading" state by checking current text content? 
+                     // Or just reset to start message if not running. 
+                     // Simplification: If webcam not running, show start message.
+                     if(!this.webcamRunning) {
+                         // Note: We lose the "Starting..." state text if we switch lang during start.
+                         // But that's a rare edge case.
+                         gestureStatus.textContent = t.gestureStart;
+                     }
                 }
             }
 
