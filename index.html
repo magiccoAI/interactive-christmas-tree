@@ -181,6 +181,38 @@
             opacity: 0.9;
         }
 
+        #mobile-menu-toggle {
+            position: fixed;
+            bottom: 24px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 999px;
+            border: 1px solid rgba(212, 175, 55, 0.7);
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(14px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-cream);
+            font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 18px;
+            letter-spacing: 2px;
+            pointer-events: auto;
+            z-index: 30;
+        }
+
+        @media (max-width: 768px) {
+            .upload-wrapper .btn-upload:first-child {
+                display: none;
+            }
+            .hint-text {
+                display: none;
+            }
+            #mobile-menu-toggle {
+                display: flex;
+            }
+        }
 
     </style>
 
@@ -224,6 +256,8 @@
             <div class="hint-text">Press 'H' to Hide Controls</div>
         </div>
     </div>
+
+    <div id="mobile-menu-toggle">☰</div>
 
     <!-- Main Application -->
     <script type="module">
@@ -881,9 +915,17 @@
                     video.srcObject = stream;
                     video.addEventListener('loadeddata', () => { 
                         this.webcamRunning = true; 
-                        document.getElementById('gesture-status').textContent = "Camera Active. Loading AI...";
-                        // Video container is hidden by CSS but active
-                        
+                        const statusEl = document.getElementById('gesture-status');
+                        if (statusEl) statusEl.textContent = "Camera Active. Loading AI...";
+                        const canvas = document.getElementById('cv-canvas');
+                        if (canvas) {
+                            canvas.width = video.videoWidth || 320;
+                            canvas.height = video.videoHeight || 240;
+                        }
+                        const playPromise = video.play();
+                        if (playPromise && playPromise.catch) {
+                            playPromise.catch(() => {});
+                        }
                         this.initMediaPipe();
                     });
                 } catch (err) { 
@@ -1112,6 +1154,18 @@
                     };
                     gestureStatus.addEventListener('click', startGesture, { passive: true });
                     gestureStatus.addEventListener('touchstart', startGesture, { passive: true });
+                }
+
+                const mobileToggle = document.getElementById('mobile-menu-toggle');
+                if (mobileToggle) {
+                    const toggleMenu = () => {
+                        document.getElementById('ui-container').classList.toggle('ui-hidden');
+                    };
+                    mobileToggle.addEventListener('click', toggleMenu);
+                    mobileToggle.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        toggleMenu();
+                    }, { passive: false });
                 }
 
                 document.getElementById('btn-reset').addEventListener('click', () => {
