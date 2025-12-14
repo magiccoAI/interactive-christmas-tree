@@ -181,6 +181,48 @@
             opacity: 0.9;
         }
 
+        .btn-sound {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            color: var(--color-gold);
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+            pointer-events: auto; /* Vital for interaction */
+        }
+        .btn-sound:hover {
+            background: rgba(212, 175, 55, 0.2);
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+        }
+        .btn-sound:active {
+            transform: scale(0.95);
+        }
+        .btn-sound.muted {
+            opacity: 0.6;
+            filter: grayscale(1);
+        }
+
+        @keyframes pulse-gold {
+            0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+        }
+        .pulse {
+            animation: pulse-gold 0.5s ease-out;
+        }
+
         #mobile-menu-toggle {
             position: fixed;
             bottom: 24px;
@@ -212,6 +254,44 @@
             #mobile-menu-toggle {
                 display: flex;
             }
+            .mode-bar {
+                display: flex; /* Visible on Mobile */
+                bottom: 120px; /* Adjust for mobile to avoid overlap */
+            }
+        }
+
+        /* --- Mode Controls --- */
+        .mode-bar {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none; /* Hidden by default (Desktop) */
+            gap: 15px;
+            pointer-events: auto;
+            z-index: 20;
+        }
+        .btn-mode {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            color: var(--color-gold);
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+        .btn-mode:hover {
+            background: rgba(212, 175, 55, 0.2);
+            transform: scale(1.1);
+        }
+        .btn-mode.active {
+            background: var(--color-gold);
+            color: #000;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+            border-color: var(--color-gold);
         }
 
     </style>
@@ -234,6 +314,13 @@
         <div class="loading-text">LOADING HOLIDAY MAGIC</div>
     </div>
 
+    <!-- HTTPS Warning -->
+    <div id="https-warning" style="display:none; position:fixed; top:0; left:0; width:100%; background:rgba(220,53,69,0.95); color:white; text-align:center; padding:12px; z-index:10001; font-family:sans-serif; font-size:14px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+        ⚠️ For full experience (Audio & Camera), please use <strong>HTTPS</strong>. 
+        <span style="display:block; font-size:12px; opacity:0.8; margin-top:4px;">Some mobile browsers block features on insecure connections.</span>
+        <button onclick="this.parentElement.style.display='none'" style="background:none; border:1px solid white; color:white; padding:2px 8px; border-radius:4px; margin-left:10px; cursor:pointer; font-size:12px;">Dismiss</button>
+    </div>
+
     <!-- UI Overlay -->
     <div id="ui-container">
         <h1>Merry Christmas</h1>
@@ -244,6 +331,14 @@
             <canvas id="cv-canvas"></canvas>
         </div>
         <div id="gesture-status"></div>
+
+        <button id="btn-sound" class="btn-sound" title="Toggle Sound">🔇</button>
+
+        <div class="mode-bar">
+            <div class="btn-mode active" data-mode="TREE" title="Tree Mode">🎄</div>
+            <div class="btn-mode" data-mode="SCATTER" title="Scatter Mode">✨</div>
+            <div class="btn-mode" data-mode="FOCUS" title="Focus Mode">🔍</div>
+        </div>
 
         <div class="upload-wrapper">
             <button class="btn-upload" onclick="document.getElementById('input-file').click()">
@@ -482,6 +577,364 @@
             }
         }
 
+        // --- Class: SoundManager (Web Audio API) ---
+        class SoundManager {
+            constructor() {
+                this.ctx = null;
+                this.muted = true; // Start muted by default for better UX flow
+                this.masterGain = null;
+                this.bgmNodes = [];
+                this.isBgmPlaying = false;
+            }
+            
+            init() {
+                if (this.ctx) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.connect(this.ctx.destination);
+                this.masterGain.gain.value = 0; // Start at 0 since muted is true
+                
+                // Create Noise Buffer for Sleigh Bells
+                const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
+                this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = this.noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+            }
+
+            resume() {
+                if (!this.ctx) this.init();
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                // If unmuted and BGM not playing, start it
+                if (!this.muted && !this.isBgmPlaying) {
+                    this.startAmbientBGM();
+                }
+            }
+
+            toggleMute() {
+                if (!this.ctx) this.init();
+                this.resume();
+                
+                this.muted = !this.muted;
+                const targetVol = this.muted ? 0 : 0.3;
+                this.masterGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.1);
+                
+                if (!this.muted) {
+                    this.playClick();
+                    this.startAmbientBGM();
+                } else {
+                    this.stopAmbientBGM();
+                }
+                
+                return this.muted;
+            }
+
+            // Sound: Ambient Background (Melodic Christmas Theme)
+            startAmbientBGM() {
+                if (this.isBgmPlaying || !this.ctx || this.muted) return;
+                this.isBgmPlaying = true;
+                const now = this.ctx.currentTime;
+
+                // 1. Gentle Wind Background (Subtle)
+                const bufferSize = this.ctx.sampleRate * 4;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                let lastOut = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    data[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = data[i];
+                    data[i] *= 3.5; 
+                }
+
+                const windSource = this.ctx.createBufferSource();
+                windSource.buffer = buffer;
+                windSource.loop = true;
+
+                const windFilter = this.ctx.createBiquadFilter();
+                windFilter.type = 'lowpass';
+                windFilter.frequency.value = 300; // Lower frequency for warmth
+
+                const windGain = this.ctx.createGain();
+                windGain.gain.value = 0.03; // Very quiet
+
+                // Breeze modulation
+                const windLFO = this.ctx.createOscillator();
+                windLFO.frequency.value = 0.08;
+                const lfoGain = this.ctx.createGain();
+                lfoGain.gain.value = 100;
+                windLFO.connect(lfoGain);
+                lfoGain.connect(windFilter.frequency);
+
+                windSource.connect(windFilter);
+                windFilter.connect(windGain);
+                windGain.connect(this.masterGain);
+
+                windSource.start(now);
+                windLFO.start(now);
+                
+                this.bgmNodes.push(windSource, windLFO, windGain, lfoGain, windFilter);
+
+                // 2. Music Box Melody Sequencer
+                this.scheduleMelody(now);
+
+                // 3. Rhythmic Sleigh Bells
+                this.scheduleSleighBells(now);
+            }
+
+            scheduleMelody(startTime) {
+                if (!this.isBgmPlaying) return;
+                
+                // Simple "Jingle Bells" Chorus Melody
+                // Notes: E E E, E E E, E G C D E
+                const bpm = 100;
+                const beat = 60 / bpm;
+                const melody = [
+                    {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 2}, // Jingle Bells
+                    {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 2}, // Jingle Bells
+                    {n: 'E5', d: 1}, {n: 'G5', d: 1}, {n: 'C5', d: 1.5}, {n: 'D5', d: 0.5}, {n: 'E5', d: 4}, // Jingle All The Way
+                    {n: 'F5', d: 1}, {n: 'F5', d: 1}, {n: 'F5', d: 1.5}, {n: 'F5', d: 0.5}, // Oh what fun
+                    {n: 'F5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 1}, // it is to ride
+                    {n: 'E5', d: 1}, {n: 'D5', d: 1}, {n: 'D5', d: 1}, {n: 'E5', d: 1}, {n: 'D5', d: 2}, {n: 'G5', d: 2} // one horse open sleigh
+                ];
+
+                const freqs = { 
+                    'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'F5': 698.46, 'G5': 783.99 
+                };
+
+                let currentTime = startTime;
+                
+                melody.forEach(note => {
+                    this.playMusicBoxNote(freqs[note.n], currentTime, note.d * beat * 0.9);
+                    currentTime += note.d * beat;
+                });
+
+                // Schedule loop
+                const totalDuration = currentTime - startTime;
+                // Add some pause before repeating
+                const loopTime = currentTime + 2; 
+
+                this.melodyTimeout = setTimeout(() => {
+                    if (this.isBgmPlaying && !this.muted) {
+                        this.scheduleMelody(this.ctx.currentTime);
+                    }
+                }, (totalDuration + 2) * 1000);
+            }
+
+            playMusicBoxNote(freq, time, duration) {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                // Music Box / Celesta tone (Sine with slight overtone)
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, time);
+
+                // Bell-like Envelope
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.15, time + 0.02); // Fast attack
+                gain.gain.exponentialRampToValueAtTime(0.01, time + duration); // Decay
+                
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                osc.start(time);
+                osc.stop(time + duration + 0.1);
+            }
+
+            scheduleSleighBells(startTime) {
+                // Play sleigh bells every beat
+                const bpm = 100;
+                const beat = 60 / bpm;
+                
+                const playBell = (time) => {
+                    if (!this.isBgmPlaying || this.muted) return;
+                    this.playSleighBellsOneShot(time);
+                };
+
+                // Simple 4/4 rhythm loop for 16 beats then repeat
+                for(let i=0; i<32; i++) {
+                   playBell(startTime + i * beat);
+                }
+
+                // Loop function
+                 this.rhythmTimeout = setTimeout(() => {
+                    if (this.isBgmPlaying && !this.muted) {
+                        this.scheduleSleighBells(this.ctx.currentTime);
+                    }
+                }, 32 * beat * 1000);
+            }
+
+            playSleighBellsOneShot(time) {
+                 const source = this.ctx.createBufferSource();
+                 source.buffer = this.noiseBuffer;
+                 
+                 const filter = this.ctx.createBiquadFilter();
+                 filter.type = 'highpass';
+                 filter.frequency.value = 4000;
+                 
+                 const gain = this.ctx.createGain();
+                 gain.gain.setValueAtTime(0, time);
+                 gain.gain.linearRampToValueAtTime(0.08, time + 0.02);
+                 gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+                 
+                 source.connect(filter);
+                 filter.connect(gain);
+                 gain.connect(this.masterGain);
+                 
+                 source.start(time);
+                 source.stop(time + 0.3);
+            }
+
+            stopAmbientBGM() {
+                this.bgmNodes.forEach(node => {
+                    try {
+                        if (node.stop) node.stop();
+                        node.disconnect();
+                    } catch(e) {}
+                });
+                this.bgmNodes = [];
+                if(this.bgmInterval) clearInterval(this.bgmInterval);
+                if(this.melodyTimeout) clearTimeout(this.melodyTimeout);
+                if(this.rhythmTimeout) clearTimeout(this.rhythmTimeout);
+                this.isBgmPlaying = false;
+            }
+
+            playOscillator(freq, type, startTime, duration, vol = 1) {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, startTime);
+                
+                gain.gain.setValueAtTime(0, startTime);
+                gain.gain.linearRampToValueAtTime(vol, startTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            }
+            
+            // Sound: Click (UI Feedback)
+            playClick() {
+                if (this.muted || !this.ctx) return;
+                this.playOscillator(800, 'sine', this.ctx.currentTime, 0.1, 0.1);
+            }
+
+            // Sound: Sleigh Bells (Christmas Atmosphere)
+            playSleighBells() {
+                if (this.muted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                // Play multiple instances of filtered noise slightly offset
+                for(let i=0; i<6; i++) {
+                    const source = this.ctx.createBufferSource();
+                    source.buffer = this.noiseBuffer;
+                    
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.value = 3000 + Math.random() * 2000; // High pitch shine
+                    
+                    const gain = this.ctx.createGain();
+                    gain.gain.value = 0;
+                    gain.gain.setValueAtTime(0, now + i*0.03);
+                    gain.gain.linearRampToValueAtTime(0.15, now + i*0.03 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i*0.03 + 0.15);
+                    
+                    source.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.masterGain);
+                    
+                    source.start(now + i*0.03);
+                    source.stop(now + i*0.03 + 0.2);
+                }
+            }
+
+            // Sound: Jingle Melody (Christmas Theme)
+            playJingleMelody() {
+                if (this.muted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const notes = [
+                    {f: 659.25, t: 0, d: 0.2}, {f: 659.25, t: 0.25, d: 0.2}, {f: 659.25, t: 0.5, d: 0.4}, // Jingle Bells (E)
+                    {f: 659.25, t: 1.0, d: 0.2}, {f: 659.25, t: 1.25, d: 0.2}, {f: 659.25, t: 1.5, d: 0.4}, // Jingle Bells (E)
+                    {f: 659.25, t: 2.0, d: 0.2}, {f: 783.99, t: 2.25, d: 0.2}, {f: 523.25, t: 2.5, d: 0.3}, {f: 587.33, t: 2.8, d: 0.1}, {f: 659.25, t: 3.0, d: 0.8} // E G C D E
+                ];
+                notes.forEach(n => {
+                    this.playOscillator(n.f, 'triangle', now + n.t, n.d, 0.15);
+                });
+                
+                // Add backing sleigh bells
+                setTimeout(() => this.playSleighBells(), 0);
+                setTimeout(() => this.playSleighBells(), 1000);
+                setTimeout(() => this.playSleighBells(), 2000);
+            }
+
+            // Sound: Magical Sparkle (for Scatter/Magic)
+            playSparkle() {
+                this.resume();
+                if (this.muted) return;
+                const now = this.ctx.currentTime;
+                // Play a cascade of high pitched sine waves
+                for(let i=0; i<8; i++) {
+                    const freq = 800 + Math.random() * 1200;
+                    const time = now + Math.random() * 0.4;
+                    this.playOscillator(freq, 'sine', time, 0.4, 0.15);
+                }
+            }
+
+            // Sound: Gentle Chime (for Tree/Restore)
+            playChime() {
+                this.resume();
+                if (this.muted) return;
+                const now = this.ctx.currentTime;
+                // C Major 9th chord arpeggio: C5, E5, G5, B5, D6
+                const notes = [523.25, 659.25, 783.99, 987.77, 1174.66]; 
+                notes.forEach((freq, i) => {
+                    this.playOscillator(freq, 'sine', now + i*0.08, 1.5, 0.2);
+                });
+            }
+
+            // Sound: Whoosh/Focus (for Focus/Select)
+            playFocus() {
+                this.resume();
+                if (this.muted) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                // Low to High sweep
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.4);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.2, now + 0.1);
+                gain.gain.linearRampToValueAtTime(0, now + 0.4);
+                
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+
+            // Sound: Success/Start (for Camera Ready)
+            playSuccess() {
+                this.resume();
+                if (this.muted) return;
+                const now = this.ctx.currentTime;
+                // Simple ascending major triad
+                this.playOscillator(523.25, 'sine', now, 0.3, 0.2); // C5
+                this.playOscillator(659.25, 'sine', now + 0.1, 0.3, 0.2); // E5
+                this.playOscillator(783.99, 'sine', now + 0.2, 0.6, 0.2); // G5
+            }
+        }
+
         // --- Class: SnowSystem ---
         class SnowSystem {
             constructor(scene, count = 1500) {
@@ -561,6 +1014,7 @@
                 this.createStarfield(); // Add stars
                 this.generateContent();
                 this.initSnow();
+                this.soundManager = new SoundManager(); // Init Sound
                 this.initEvents();
                 // this.initMediaPipe(); // Removed auto-init to wait for user interaction or camera ready
                 
@@ -906,6 +1360,14 @@
             // --- Camera & Gesture Setup ---
             async setupCamera() {
                 if(this.webcamRunning) return;
+
+                // HTTPS Check
+                if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                    const statusEl = document.getElementById('gesture-status');
+                    if (statusEl) statusEl.textContent = "⚠️ Camera requires HTTPS or Localhost";
+                    console.warn("Camera requires Secure Context (HTTPS)");
+                    return;
+                }
                 
                 const video = document.getElementById('webcam');
                 const constraints = { video: { facingMode: "user", width: 320, height: 240 } };
@@ -959,6 +1421,7 @@
                         numHands: 1
                     });
                     document.getElementById('gesture-status').textContent = "AI Ready! Show Hand to Control";
+                    if(this.soundManager) this.soundManager.playSuccess();
                 } catch (e) {
                     console.error("MediaPipe failed:", e);
                     document.getElementById('gesture-status').textContent = "AI Load Failed.";
@@ -1099,6 +1562,11 @@
             updateLayout(newMode) {
                 STATE.mode = newMode;
                 
+                // Update UI Buttons
+                document.querySelectorAll('.btn-mode').forEach(b => {
+                    b.classList.toggle('active', b.dataset.mode === newMode);
+                });
+
                 // Count totals per type for correct normalization
                 let decoCount = 0;
                 let ribbonCount = 0;
@@ -1109,7 +1577,13 @@
                     const targetPhoto = this.photos.length > 0 
                         ? this.photos[Math.floor(Math.random() * this.photos.length)] : null;
                     this.particles.forEach(p => p.setFocus(p === targetPhoto));
+                    if(this.soundManager) this.soundManager.playFocus(); // SFX
                 } else {
+                    if (newMode === MODES.SCATTER && STATE.mode !== MODES.SCATTER) {
+                         if(this.soundManager) this.soundManager.playSparkle(); // SFX
+                    } else if (newMode === MODES.TREE && STATE.mode !== MODES.TREE) {
+                         if(this.soundManager) this.soundManager.playSleighBells(); // SFX
+                    }
                     this.particles.forEach((p) => {
                         if (p.type === 'DUST') {
                             p.calculateScatterPos();
@@ -1131,7 +1605,67 @@
 
 
 
+            initManualControls() {
+                const canvas = this.renderer.domElement;
+                let isDragging = false;
+                let previousMousePosition = { x: 0, y: 0 };
+                
+                const onStart = (x, y) => {
+                    isDragging = true;
+                    previousMousePosition = { x, y };
+                };
+                
+                const onMove = (x, y) => {
+                    if (!isDragging) return;
+                    const deltaMove = {
+                        x: x - previousMousePosition.x,
+                        y: y - previousMousePosition.y
+                    };
+                    
+                    this.mainGroup.rotation.y += deltaMove.x * 0.005;
+                    // Optional: Tilt
+                    // this.mainGroup.rotation.x += deltaMove.y * 0.005;
+                    
+                    previousMousePosition = { x, y };
+                };
+                
+                const onEnd = () => { isDragging = false; };
+                
+                // Mouse
+                canvas.addEventListener('mousedown', e => onStart(e.clientX, e.clientY));
+                window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+                window.addEventListener('mouseup', onEnd);
+                
+                // Touch
+                canvas.addEventListener('touchstart', e => {
+                    if(e.touches.length === 1) {
+                        onStart(e.touches[0].clientX, e.touches[0].clientY);
+                    }
+                }, { passive: false });
+                
+                canvas.addEventListener('touchmove', e => {
+                    if(e.touches.length === 1 && isDragging) {
+                        e.preventDefault(); 
+                        onMove(e.touches[0].clientX, e.touches[0].clientY);
+                    }
+                }, { passive: false });
+                
+                canvas.addEventListener('touchend', onEnd);
+            }
+
             initEvents() {
+                // Initialize Manual Controls (Touch/Mouse)
+                this.initManualControls();
+
+                // Mode Buttons
+                document.querySelectorAll('.btn-mode').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const mode = btn.dataset.mode;
+                        if(MODES[mode]) this.updateLayout(MODES[mode]);
+                    });
+                });
+
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
@@ -1143,11 +1677,36 @@
 
                 document.getElementById('input-file').addEventListener('change', (e) => this.handleImageUpload(e));
 
+                // Sound Button
+                const btnSound = document.getElementById('btn-sound');
+                if(btnSound) {
+                    // Set initial state to Muted (OFF)
+                    btnSound.textContent = '🔇';
+                    btnSound.classList.add('muted');
+                    
+                    const toggleSound = (e) => {
+                        e.preventDefault(); // Prevent double firing on touch devices
+                        e.stopPropagation();
+                        const isMuted = this.soundManager.toggleMute();
+                        btnSound.textContent = isMuted ? '🔇' : '🔊';
+                        
+                        // Add visual feedback
+                        btnSound.classList.toggle('muted', isMuted);
+                        btnSound.classList.remove('pulse');
+                        void btnSound.offsetWidth; // trigger reflow
+                        btnSound.classList.add('pulse');
+                    };
+
+                    btnSound.addEventListener('click', toggleSound);
+                    btnSound.addEventListener('touchstart', toggleSound, { passive: false });
+                }
+
                 const gestureStatus = document.getElementById('gesture-status');
                 if (gestureStatus) {
                     gestureStatus.textContent = "Tap here to enable gesture control";
                     const startGesture = () => {
                         gestureStatus.textContent = "⌛ Starting Gesture Control...";
+                        if(this.soundManager) this.soundManager.resume(); // Resume Audio
                         this.setupCamera();
                         gestureStatus.removeEventListener('click', startGesture);
                         gestureStatus.removeEventListener('touchstart', startGesture);
@@ -1170,6 +1729,7 @@
 
                 document.getElementById('btn-reset').addEventListener('click', () => {
                     this.updateLayout(MODES.TREE);
+                    if(this.soundManager) this.soundManager.playJingleMelody();
                 });
                 window.addEventListener('keydown', (e) => {
                     if (e.key.toLowerCase() === 'h') {
@@ -1180,6 +1740,12 @@
                     document.getElementById('loader').style.opacity = 0;
                     setTimeout(() => document.getElementById('loader').remove(), 800);
                 }, 2000);
+
+                // HTTPS Check
+                if (!window.isSecureContext) {
+                    const warning = document.getElementById('https-warning');
+                    if(warning) warning.style.display = 'block';
+                }
             }
 
             animate() {
