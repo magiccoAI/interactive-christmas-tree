@@ -55,7 +55,7 @@
 
         .upload-wrapper {
             position: absolute;
-            bottom: 40px;
+            bottom: 30px; /* Lowered */
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
@@ -63,28 +63,40 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 8px; /* Tighter gap */
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
         }
 
         .btn-upload {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(14px);
-            border: 1px solid rgba(212, 175, 55, 0.7);
+            background: rgba(255, 255, 255, 0.05); /* More transparent */
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(212, 175, 55, 0.4); /* Thinner border */
             color: var(--color-cream);
-            padding: 12px 30px;
+            padding: 8px 24px; /* Smaller padding */
             font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 14px;
+            font-size: 13px; /* Smaller font */
             font-weight: 300;
             cursor: pointer;
             transition: all 0.25s ease;
             text-transform: uppercase;
-            letter-spacing: 2px;
+            letter-spacing: 1.5px;
             border-radius: 999px;
+            min-width: 120px;
         }
 
         .btn-upload:hover {
-            background: rgba(212, 175, 55, 0.12);
-            box-shadow: 0 0 22px rgba(212, 175, 55, 0.7);
+            background: rgba(212, 175, 55, 0.15);
+            border-color: rgba(212, 175, 55, 0.8);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
             transform: translateY(-1px);
         }
 
@@ -346,14 +358,19 @@
         </div>
 
         <div class="upload-wrapper">
-            <button class="btn-upload" onclick="document.getElementById('input-file').click()" data-i18n="addMemories">
-                Add Memories
-            </button>
-            <button class="btn-upload" id="btn-reset" data-i18n="restoreTree">
-                Restore Tree
-            </button>
-            <input type="file" id="input-file" accept="image/*">
+            <div class="button-group">
+                <button class="btn-upload" onclick="document.getElementById('input-file').click()" data-i18n="addMemories">
+                    Add Memories
+                </button>
+                <button class="btn-upload" id="btn-reset" data-i18n="restoreTree">
+                    Restore Tree
+                </button>
+            </div>
+            <input type="file" id="input-file" accept="image/*" multiple>
             <div class="hint-text" data-i18n="hintHide">Press 'H' to Hide Controls</div>
+            <div class="privacy-hint" style="font-size: 10px; opacity: 0.6; margin-top: 2px; max-width: 200px;">
+                <span data-i18n="privacyNotice">🔒 Photos stay on your device</span>
+            </div>
         </div>
     </div>
 
@@ -402,7 +419,8 @@
             mode: MODES.TREE,
             targetMode: MODES.TREE,
             focusTarget: null,
-            tilt: { x: 0, y: 0 } // Renamed from handRotation to tilt
+            tilt: { x: 0, y: 0 },
+            photoIndex: 0 // Track current photo
         };
 
         const I18N = {
@@ -432,7 +450,10 @@
                 gestureMove: "🖐 Move Hand L/R to Spin",
                 gesturePinch: "👌 Pinch: Focus",
                 gestureFist: "✊ Fist: Restore Tree",
-                gestureOpen: "🖐 Open: Scatter"
+                gestureOpen: "🖐 Open: Scatter",
+                privacyNotice: "🔒 Photos stay on your device",
+                gestureSwipe: "🖐 Move L/R to Browse Photos",
+                viewGallery: "View Gallery"
             },
             zh: {
                 title: "圣诞快乐",
@@ -460,7 +481,10 @@
                 gestureMove: "🖐 左右移动手掌旋转",
                 gesturePinch: "👌 捏合：聚焦",
                 gestureFist: "✊ 握拳：重置",
-                gestureOpen: "🖐 张开：散落"
+                gestureOpen: "🖐 张开：散落",
+                privacyNotice: "🔒 照片仅在本地处理，不上传云端",
+                gestureSwipe: "🖐 左右移动切换照片",
+                viewGallery: "浏览照片"
             }
         };
 
@@ -502,19 +526,37 @@
                     randFloat(-0.5, 0.5)
                 );
                 
+                // Pre-calculate Focus/Gallery Mode Background Position (Deterministic)
+                // Use a spherical distribution but push it back to form a backdrop
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = randFloat(30, 60); // Further back
+                this.galleryPos = new THREE.Vector3(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.sin(phi) * Math.sin(theta),
+                    r * Math.cos(phi)
+                );
+                
                 // Initialize random position
                 this.mesh.position.set(randFloat(-50, 50), randFloat(-50, 50), randFloat(-50, 50));
                 this.updateTargets(MODES.TREE, 0); 
             }
 
-            update(mode, time) {
+            update(mode, time, parentRotY = 0) {
                 // Lerp towards target
                 const lerpSpeed = 0.05;
                 
                 this.mesh.position.lerp(this.targetPos, lerpSpeed);
                 
                 // Rotation
-                if (mode === MODES.SCATTER) {
+                if (this.isFocused) {
+                    // Lock rotation to face camera regardless of parent rotation
+                    // Parent (mainGroup) rotates around Y. We counter-rotate.
+                    // Target is Math.PI (facing camera).
+                    this.mesh.rotation.x = this.targetRot.x;
+                    this.mesh.rotation.z = this.targetRot.z;
+                    this.mesh.rotation.y = this.targetRot.y - parentRotY;
+                } else if (mode === MODES.SCATTER) {
                     this.mesh.rotation.x += this.velocity.x * 2;
                     this.mesh.rotation.y += this.velocity.y * 2;
                 } else {
@@ -528,20 +570,24 @@
             }
 
             setFocus(isTarget) {
+                this.isFocused = isTarget; // Track focus state
                 if (isTarget) {
-                    this.targetPos.set(0, 2, 35);
-                    this.targetScale.set(4.5, 4.5, 4.5);
-                    this.targetRot.set(0, 0, 0);
+                    // Position: Center in front of camera (Camera is at 0, 2, 50)
+                    // We place it at 0, 2, 40 to be close
+                    this.targetPos.set(0, 2, 40);
+                    
+                    // Rotation: Turn card so textured front (-Z) faces the camera
+                    this.targetRot.set(0, Math.PI, 0);
+                    
+                    // Scale: Pop up large!
+                    this.targetScale.set(5.5, 5.5, 5.5);
                 } else {
-                    const theta = Math.random() * Math.PI * 2;
-                    const phi = Math.acos(2 * Math.random() - 1);
-                    const r = randFloat(20, 40);
-                    this.targetPos.set(
-                        r * Math.sin(phi) * Math.cos(theta),
-                        r * Math.sin(phi) * Math.sin(theta),
-                        r * Math.cos(phi)
-                    );
-                    this.targetScale.set(1, 1, 1);
+                    // Use pre-calculated deterministic position to prevent shuffling
+                    this.targetPos.copy(this.galleryPos);
+                    this.targetScale.set(0.5, 0.5, 0.5); // Diminish background items
+                    
+                    // Add slow rotation to background items for "Stars" effect
+                    // handled in update() implicitly if we wanted, but static is fine for now
                 }
             }
 
@@ -1071,7 +1117,9 @@
                 this.container = document.body;
                 this.particles = [];
                 this.photos = [];
+                this.defaultPhoto = null;
                 this.clock = new THREE.Clock();
+                this.lastSwitchTime = 0; // Debounce for photo switching
                 
                 this.initThree();
                 this.initLights();
@@ -1127,8 +1175,128 @@
                 ground.receiveShadow = true;
                 this.scene.add(ground);
 
-                // Orbit Controls removed for exclusive gesture interaction
+                // Add Overlay Plane for Focus Mode
+                const overlayGeo = new THREE.PlaneGeometry(300, 300);
+                const overlayMat = new THREE.MeshBasicMaterial({ 
+                    color: 0x000000, 
+                    transparent: true, 
+                    opacity: 0.0,
+                    depthWrite: false // Don't block other transparent objects
+                });
+                this.overlayMesh = new THREE.Mesh(overlayGeo, overlayMat);
+                this.overlayMesh.position.set(0, 0, 25); // Between tree (0) and photo (35)
+                this.overlayMesh.visible = false;
+                this.scene.add(this.overlayMesh);
 
+                // Orbit Controls removed for exclusive gesture interaction
+                this.initManualControls();
+            }
+
+            initManualControls() {
+                // Raycaster for click interaction
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                
+                // Track dragging for photo
+                this.isDragging = false;
+                this.dragStart = new THREE.Vector2();
+                this.dragPos = new THREE.Vector2();
+                
+                // Track panning for tree
+                this.isPanning = false;
+                this.panStart = 0;
+                
+                window.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                window.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                window.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                window.addEventListener('touchstart', (e) => this.onTouchStart(e), {passive: false});
+                window.addEventListener('touchmove', (e) => this.onTouchMove(e), {passive: false});
+                window.addEventListener('touchend', (e) => this.onTouchEnd(e));
+                window.addEventListener('wheel', (e) => this.onWheel(e), {passive: false});
+            }
+
+            onMouseDown(e) {
+                if (STATE.mode === MODES.FOCUS && this.photos.length > 0) {
+                    // Check if clicked on photo
+                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    
+                    const currentPhoto = this.photos[STATE.photoIndex];
+                    if (currentPhoto) {
+                         const intersects = this.raycaster.intersectObject(currentPhoto.mesh);
+                         if (intersects.length > 0) {
+                             this.isDragging = true;
+                             this.dragStart.set(e.clientX, e.clientY);
+                             return;
+                         } else {
+                             // Clicked outside photo -> Exit Focus Mode
+                             this.updateLayout(MODES.TREE);
+                             return;
+                         }
+                    }
+                }
+                
+                this.isPanning = true;
+                this.panStart = e.clientX;
+            }
+
+            onMouseMove(e) {
+                if (STATE.mode === MODES.FOCUS && this.isDragging) {
+                    const deltaX = e.clientX - this.dragStart.x;
+                    const deltaY = e.clientY - this.dragStart.y;
+                    
+                    const currentPhoto = this.photos[STATE.photoIndex];
+                    if (currentPhoto) {
+                        // Move photo based on drag (scale factor needs adjustment)
+                        currentPhoto.targetPos.x += deltaX * 0.02;
+                        currentPhoto.targetPos.y -= deltaY * 0.02;
+                    }
+                    
+                    this.dragStart.set(e.clientX, e.clientY);
+                    return;
+                }
+
+                if (this.isPanning && STATE.mode === MODES.TREE) {
+                    const delta = e.clientX - this.panStart;
+                    STATE.rotationSpeed = delta * 0.0005;
+                    this.mainGroup.rotation.y += delta * 0.005;
+                    this.panStart = e.clientX;
+                }
+            }
+
+            onMouseUp(e) {
+                this.isPanning = false;
+                this.isDragging = false;
+                STATE.rotationSpeed = 0.002;
+            }
+            
+            onWheel(e) {
+                if (STATE.mode === MODES.FOCUS) {
+                    e.preventDefault();
+                    const currentPhoto = this.photos[STATE.photoIndex];
+                    if (currentPhoto) {
+                        // Zoom photo
+                        const scaleDelta = e.deltaY * -0.005;
+                        const newScale = Math.max(1.0, Math.min(10.0, currentPhoto.targetScale.x + scaleDelta));
+                        currentPhoto.targetScale.set(newScale, newScale, newScale);
+                    }
+                }
+            }
+
+            // Touch events simplified mapping
+            onTouchStart(e) {
+                if (e.touches.length === 1) {
+                    this.onMouseDown(e.touches[0]);
+                }
+            }
+            onTouchMove(e) {
+                if (e.touches.length === 1) {
+                    this.onMouseMove(e.touches[0]);
+                }
+            }
+            onTouchEnd(e) {
+                this.onMouseUp(e);
             }
 
             initLights() {
@@ -1526,21 +1694,42 @@
                         const x = lm[9].x; // Middle finger MCP as center
                         const y = lm[9].y;
                         
-                        const deadzone = 0.15;
+                        const deadzone = 0.12; // Reduced for better sensitivity
                         const center = 0.5;
                         let rotSpeed = 0;
                         
                         // Joystick Logic: Move hand Left/Right to spin
+                        const isRotating = x < center - deadzone || x > center + deadzone;
+                        
+                        // Universal Rotation Logic (Applied in ALL modes)
                         if (x < center - deadzone) {
                             // Left -> Spin Left
-                            rotSpeed = -0.05 * ((center - deadzone - x) / (center - deadzone)); 
+                            rotSpeed = -0.12 * ((center - deadzone - x) / (center - deadzone)); 
                         } else if (x > center + deadzone) {
                             // Right -> Spin Right
-                            rotSpeed = 0.05 * ((x - (center + deadzone)) / (center - deadzone));
+                            rotSpeed = 0.12 * ((x - (center + deadzone)) / (center - deadzone));
+                        }
+                        this.mainGroup.rotation.y += rotSpeed; 
+                        
+                        if (STATE.mode === MODES.FOCUS) {
+                            // In FOCUS mode, ALSO use Left/Right to switch photos (Navigation)
+                            const now = performance.now();
+                            if (isRotating && (now - this.lastSwitchTime > 500)) { // 500ms debounce
+                                if (x < center - deadzone) {
+                                    // Move Left -> Previous Photo
+                                    STATE.photoIndex--;
+                                    if (STATE.photoIndex < 0) STATE.photoIndex = this.photos.length - 1;
+                                } else if (x > center + deadzone) {
+                                    // Move Right -> Next Photo
+                                    STATE.photoIndex++;
+                                    if (STATE.photoIndex >= this.photos.length) STATE.photoIndex = 0;
+                                }
+                                this.updateLayout(MODES.FOCUS);
+                                this.lastSwitchTime = now;
+                                if(this.soundManager) this.soundManager.playFocus(); // Sound feedback
+                            }
                         }
                         
-                        this.mainGroup.rotation.y += rotSpeed; 
-
                         // 2. Tilt Control (Direct Map)
                         // Y 0(top) to 1(bottom) -> Tilt Up/Down
                         const targetTiltX = (y - 0.5) * 1.0; 
@@ -1551,27 +1740,53 @@
                         const scale = Math.hypot(lm[5].x - wrist.x, lm[5].y - wrist.y) || 0.1; // Hand size
                         const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y) / scale;
                         
-                        // Calculate finger extension
+                        // Calculate finger extension (Tip to Wrist distance is more robust)
                         const tips = [8, 12, 16, 20];
-                        const mcps = [5, 9, 13, 17];
-                        let extensionSum = 0;
+                        let tipToWristSum = 0;
                         for(let i=0; i<4; i++) {
-                            extensionSum += Math.hypot(lm[tips[i]].x - lm[mcps[i]].x, lm[tips[i]].y - lm[mcps[i]].y);
+                            tipToWristSum += Math.hypot(lm[tips[i]].x - wrist.x, lm[tips[i]].y - wrist.y);
                         }
-                        const extensionRatio = (extensionSum / 4) / scale;
+                        const tipToWristRatio = (tipToWristSum / 4) / scale;
+
+                        // Precise "OK" Gesture Logic:
+                        // 1. Thumb and Index tips close (pinchDist < threshold)
+                        // 2. Middle, Ring, Pinky extended
+                        const middleExtended = Math.hypot(lm[12].x - lm[0].x, lm[12].y - lm[0].y) > Math.hypot(lm[9].x - lm[0].x, lm[9].y - lm[0].y) * 1.3;
+                        const ringExtended = Math.hypot(lm[16].x - lm[0].x, lm[16].y - lm[0].y) > Math.hypot(lm[13].x - lm[0].x, lm[13].y - lm[0].y) * 1.3;
+                        const pinkyExtended = Math.hypot(lm[20].x - lm[0].x, lm[20].y - lm[0].y) > Math.hypot(lm[17].x - lm[0].x, lm[17].y - lm[0].y) * 1.3;
+                        const isOkGesture = pinchDist < 0.4 && middleExtended && ringExtended && pinkyExtended;
 
                         let newMode = STATE.mode;
                         let status = I18N[currentLang].gestureMove;
 
-                        if (pinchDist < 0.4) {
-                            newMode = MODES.FOCUS;
-                            status = I18N[currentLang].gesturePinch;
-                        } else if (extensionRatio < 1.0) { 
+                        if (isOkGesture) {
+                            // Only switch to FOCUS if not already in it (or re-triggering logic if needed)
+                            if (STATE.mode !== MODES.FOCUS) {
+                                newMode = MODES.FOCUS;
+                                status = I18N[currentLang].gesturePinch;
+                            } else {
+                                // Already in focus, pinch just maintains it
+                                status = I18N[currentLang].gestureSwipe; 
+                            }
+                        } else if (tipToWristRatio < 1.3) { 
+                            // Fist: Tips close to wrist (approx 1.0 or less usually, but 1.3 is safe upper bound for loose fist)
                             newMode = MODES.TREE;
                             status = I18N[currentLang].gestureFist;
-                        } else if (extensionRatio > 2.0) { 
-                            newMode = MODES.SCATTER;
-                            status = I18N[currentLang].gestureOpen;
+                        } else if (tipToWristRatio > 1.7) { 
+                            // Open: Tips far from wrist (approx 2.0+ usually)
+                            // CONTEXT AWARENESS:
+                            // If user is actively rotating (moving hand L/R) and in TREE mode, 
+                            // ignore the "Open" gesture because "Open Hand + Move" is a natural rotation gesture.
+                            // We don't want to accidentally scatter the tree while spinning it.
+                            if (isRotating && STATE.mode === MODES.TREE) {
+                                newMode = MODES.TREE; // Keep Tree
+                                status = I18N[currentLang].gestureMove; // Show Rotation Status
+                            } else {
+                                newMode = MODES.SCATTER;
+                                status = I18N[currentLang].gestureOpen;
+                            }
+                        } else {
+                            status = STATE.mode === MODES.FOCUS ? I18N[currentLang].gestureSwipe : I18N[currentLang].gestureMove;
                         }
 
                         document.getElementById('gesture-status').textContent = status;
@@ -1593,39 +1808,129 @@
                 ctx.fillText(text, 128, 128);
                 const tex = new THREE.CanvasTexture(canvas);
                 tex.colorSpace = THREE.SRGBColorSpace;
-                this.addPhotoToScene(tex);
+                const p = this.addPhotoToScene(tex);
+                p.isDefault = true;
+                this.defaultPhoto = p;
             }
 
             addPhotoToScene(texture) {
-                const geometry = new THREE.BoxGeometry(2, 2, 0.2);
-                const mat = [
-                    this.materials.photoFrame, this.materials.photoFrame,
-                    this.materials.photoFrame, this.materials.photoFrame,
-                    new THREE.MeshBasicMaterial({ map: texture }),
-                    this.materials.photoFrame
-                ];
-                const mesh = new THREE.Mesh(geometry, mat);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                const img = texture.image;
+                const aspect = img.width / img.height;
+                
+                const cardWidth = 500;
+                const cardHeight = 600; // Extra space for bottom margin
+                canvas.width = cardWidth;
+                canvas.height = cardHeight;
+                
+                ctx.fillStyle = '#fdfdfd';
+                ctx.fillRect(0, 0, cardWidth, cardHeight);
+                
+                ctx.shadowColor = 'rgba(0,0,0,0.2)';
+                ctx.shadowBlur = 20;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 5;
+                
+                const margin = 40;
+                const drawWidth = cardWidth - (margin * 2);
+                const drawHeight = drawWidth / aspect;
+                
+                const bottomMargin = 120;
+                const maxImgHeight = cardHeight - margin - bottomMargin;
+                
+                let finalW = drawWidth;
+                let finalH = drawHeight;
+                
+                if (finalH > maxImgHeight) {
+                    finalH = maxImgHeight;
+                    finalW = finalH * aspect;
+                }
+                
+                const x = (cardWidth - finalW) / 2;
+                const y = margin + (maxImgHeight - finalH) / 2;
+                
+                ctx.drawImage(img, x, y, finalW, finalH);
+                
+                ctx.shadowColor = 'transparent';
+                
+                const polaroidTex = new THREE.CanvasTexture(canvas);
+                polaroidTex.colorSpace = THREE.SRGBColorSpace;
+                polaroidTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+
+                const geometry = new THREE.BoxGeometry(2.5, 3.0, 0.05); // Thinner, Polaroid Aspect
+                
+                const whiteMat = new THREE.MeshStandardMaterial({ 
+                    color: 0xfdfdfd, 
+                    roughness: 0.9, 
+                    metalness: 0.1 
+                });
+                const frontMat = new THREE.MeshStandardMaterial({ 
+                    map: polaroidTex, 
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                
+                const mats = [whiteMat, whiteMat, whiteMat, whiteMat, frontMat, whiteMat];
+                
+                const mesh = new THREE.Mesh(geometry, mats);
                 this.mainGroup.add(mesh);
+                
                 const p = new Particle(mesh, 'PHOTO');
+                
+                p.mesh.position.set(0, 0, 40);
+                p.mesh.rotation.set(0, 0, randFloat(-0.2, 0.2));
+                p.mesh.scale.set(0, 0, 0); // Pop in
+                
                 this.particles.unshift(p); 
                 this.photos.push(p);
+                STATE.photoIndex = this.photos.length - 1;
                 this.updateLayout(STATE.mode);
+                
+                if(this.soundManager) this.soundManager.playFocus(); // Use Focus sound for "New Memory"
+                return p;
             }
 
             handleImageUpload(ev) {
-                const f = ev.target.files[0];
-                if(!f) return;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    new THREE.TextureLoader().load(e.target.result, (t) => {
-                        t.colorSpace = THREE.SRGBColorSpace;
-                        this.addPhotoToScene(t);
-                    });
-                };
-                reader.readAsDataURL(f);
+                const files = ev.target.files;
+                if(!files || files.length === 0) return;
+
+                if (this.defaultPhoto) {
+                    const photoIndex = this.photos.indexOf(this.defaultPhoto);
+                    if (photoIndex !== -1) {
+                        this.photos.splice(photoIndex, 1);
+                    }
+                    const particleIndex = this.particles.indexOf(this.defaultPhoto);
+                    if (particleIndex !== -1) {
+                        this.particles.splice(particleIndex, 1);
+                    }
+                    if (this.defaultPhoto.mesh && this.defaultPhoto.mesh.parent) {
+                        this.defaultPhoto.mesh.parent.remove(this.defaultPhoto.mesh);
+                    }
+                    this.defaultPhoto = null;
+                }
+                
+                Array.from(files).forEach((f, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        new THREE.TextureLoader().load(e.target.result, (t) => {
+                            t.colorSpace = THREE.SRGBColorSpace;
+                            // Add slight delay for multiple photos so they don't stack perfectly
+                            setTimeout(() => {
+                                this.addPhotoToScene(t);
+                            }, index * 300);
+                        });
+                    };
+                    reader.readAsDataURL(f);
+                });
+                
+                // Reset input so same file can be selected again
+                ev.target.value = '';
             }
 
             updateLayout(newMode) {
+                const prevMode = STATE.mode;
                 STATE.mode = newMode;
                 
                 // Update UI Buttons
@@ -1640,14 +1945,22 @@
                 const totalRibbon = this.particles.filter(p => p.type === 'RIBBON').length;
 
                 if (newMode === MODES.FOCUS) {
-                    const targetPhoto = this.photos.length > 0 
-                        ? this.photos[Math.floor(Math.random() * this.photos.length)] : null;
-                    this.particles.forEach(p => p.setFocus(p === targetPhoto));
-                    if(this.soundManager) this.soundManager.playFocus(); // SFX
+                    if(this.overlayMesh) this.overlayMesh.visible = true;
+                    if (this.photos.length > 0) {
+                        if (STATE.photoIndex >= this.photos.length) STATE.photoIndex = 0;
+                        if (STATE.photoIndex < 0) STATE.photoIndex = this.photos.length - 1;
+                        
+                        const targetPhoto = this.photos[STATE.photoIndex];
+                        this.particles.forEach(p => p.setFocus(p === targetPhoto));
+                        if (prevMode !== MODES.FOCUS && this.soundManager) {
+                            this.soundManager.playFocus();
+                        }
+                    }
                 } else {
-                    if (newMode === MODES.SCATTER && STATE.mode !== MODES.SCATTER) {
+                    if(this.overlayMesh) this.overlayMesh.visible = false;
+                    if (newMode === MODES.SCATTER && prevMode !== MODES.SCATTER) {
                          if(this.soundManager) this.soundManager.playSparkle(); // SFX
-                    } else if (newMode === MODES.TREE && STATE.mode !== MODES.TREE) {
+                    } else if (newMode === MODES.TREE && prevMode !== MODES.TREE) {
                          if(this.soundManager) this.soundManager.playSleighBells(); // SFX
                     }
                     this.particles.forEach((p) => {
@@ -1797,6 +2110,7 @@
                     this.updateLayout(MODES.TREE);
                     if(this.soundManager) this.soundManager.playJingleMelody();
                 });
+                
                 window.addEventListener('keydown', (e) => {
                     if (e.key.toLowerCase() === 'h') {
                         document.getElementById('ui-container').classList.toggle('ui-hidden');
@@ -1885,7 +2199,7 @@
                 const time = this.clock.getElapsedTime();
                 
                 if(this.snowSystem) this.snowSystem.update();
-                this.particles.forEach(p => p.update(STATE.mode, time));
+                this.particles.forEach(p => p.update(STATE.mode, time, this.mainGroup.rotation.y));
                 
                 // Process Gestures if active
                 if (this.webcamRunning) {
