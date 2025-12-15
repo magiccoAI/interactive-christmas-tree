@@ -256,6 +256,31 @@
             z-index: 30;
         }
 
+        #mobile-magic-toggle {
+            position: fixed;
+            bottom: 24px;
+            left: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 999px;
+            border: 1px solid var(--color-gold);
+            background: rgba(212, 175, 55, 0.2);
+            backdrop-filter: blur(14px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-cream);
+            font-size: 24px;
+            pointer-events: auto;
+            z-index: 30;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+            transition: all 0.3s ease;
+        }
+        #mobile-magic-toggle:active {
+            transform: scale(0.9);
+            background: var(--color-gold);
+        }
+
         @media (max-width: 768px) {
             .upload-wrapper .btn-upload:first-child {
                 display: none;
@@ -263,12 +288,13 @@
             .hint-text, .privacy-hint {
                 display: none;
             }
-            #mobile-menu-toggle {
+            #mobile-menu-toggle, #mobile-magic-toggle {
                 display: flex;
             }
             .mode-bar {
                 display: flex; /* Visible on Mobile */
-                bottom: 120px; /* Adjust for mobile to avoid overlap */
+                bottom: 140px; /* Increased from 120px to avoid Restore button overlap */
+                transform: translateX(-50%) scale(1.1); /* Slightly larger on mobile */
             }
         }
 
@@ -282,24 +308,34 @@
             gap: 15px;
             pointer-events: auto;
             z-index: 20;
+            /* Added background for better visibility */
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 15px;
+            border-radius: 30px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
         }
-        .btn-mode, .btn-magic {
-            background: rgba(0, 0, 0, 0.4);
+        .btn-mode {
+            background: rgba(0, 0, 0, 0.6); /* Darker background */
             backdrop-filter: blur(8px);
             border: 1px solid rgba(212, 175, 55, 0.5);
             color: var(--color-gold);
-            width: 44px; height: 44px;
+            width: 48px; height: 48px; /* Slightly larger */
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 24px; /* Larger icon */
             transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
-        .btn-mode:hover, .btn-magic:hover {
+        
+        /* Desktop Magic Button Hidden (Moved to mobile left corner) */
+        .btn-magic { display: none; } 
+
+        .btn-mode:hover {
             background: rgba(212, 175, 55, 0.2);
             transform: scale(1.1);
         }
-        .btn-mode.active, .btn-magic:active {
+        .btn-mode.active {
             background: var(--color-gold);
             color: #000;
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
@@ -355,7 +391,7 @@
             <div class="btn-mode active" data-mode="TREE" title="Tree Mode">🎄</div>
             <div class="btn-mode" data-mode="SCATTER" title="Scatter Mode">✨</div>
             <div class="btn-mode" data-mode="FOCUS" title="Focus Mode">🔍</div>
-            <div class="btn-magic" id="btn-magic" title="Magic Color">🪄</div>
+            <!-- Magic button moved to dedicated mobile slot -->
         </div>
 
         <div class="upload-wrapper">
@@ -381,6 +417,7 @@
     </div>
 
     <div id="mobile-menu-toggle" role="button" aria-label="Toggle Menu Visibility" title="Toggle Menu">☰</div>
+    <div id="mobile-magic-toggle" role="button" aria-label="Magic Color" title="Magic Color">🪄</div>
 
     <!-- Main Application -->
     <script type="module">
@@ -2101,6 +2138,23 @@
                         if(MODES[mode]) this.updateLayout(MODES[mode]);
                     });
                 });
+
+                // Magic Button (Mobile Only)
+                const mobileMagic = document.getElementById('mobile-magic-toggle');
+                if(mobileMagic) {
+                    const handleMagic = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault(); // Prevent ghost clicks
+                        this.switchTheme();
+                        // Add animation class
+                        mobileMagic.classList.remove('pulse');
+                        void mobileMagic.offsetWidth;
+                        mobileMagic.classList.add('pulse');
+                    };
+                    
+                    mobileMagic.addEventListener('click', handleMagic);
+                    mobileMagic.addEventListener('touchstart', handleMagic, {passive: false});
+                }
 
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
