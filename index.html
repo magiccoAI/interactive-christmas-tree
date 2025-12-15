@@ -291,6 +291,10 @@
             #mobile-menu-toggle, #mobile-magic-toggle {
                 display: flex;
             }
+            /* Hide desktop magic button on mobile to avoid duplication */
+            #btn-magic-desktop {
+                display: none;
+            }
             .mode-bar {
                 display: flex; /* Visible on Mobile */
                 bottom: 140px; /* Increased from 120px to avoid Restore button overlap */
@@ -329,7 +333,10 @@
         }
         
         /* Desktop Magic Button Hidden (Moved to mobile left corner) */
-        .btn-magic { display: none; } 
+        /* .btn-magic { display: none; } Removed to allow desktop button */
+        #btn-magic-desktop {
+            display: flex; /* Visible in flex container */
+        }
 
         .btn-mode:hover {
             background: rgba(212, 175, 55, 0.2);
@@ -391,7 +398,7 @@
             <div class="btn-mode active" data-mode="TREE" title="Tree Mode">🎄</div>
             <div class="btn-mode" data-mode="SCATTER" title="Scatter Mode">✨</div>
             <div class="btn-mode" data-mode="FOCUS" title="Focus Mode">🔍</div>
-            <!-- Magic button moved to dedicated mobile slot -->
+            <div class="btn-mode" id="btn-magic-desktop" title="Magic Theme">🪄</div>
         </div>
 
         <div class="upload-wrapper">
@@ -1171,6 +1178,10 @@
                 this.clock = new THREE.Clock();
                 this.lastSwitchTime = 0; // Debounce for photo switching
                 
+                this.isRainbowMode = false;
+                this.rainbowHue = 0;
+                this.currentThemeIndex = 0; // For sequential switching
+
                 this.initThree();
                 this.initLights();
                 this.initPostProcessing();
@@ -1247,43 +1258,52 @@
                 
                 const themes = [
                     { // Classic
+                        name: 'classic',
                         gold: 0xffd700, green: 0x004225, red: 0x8a0f0f, blue: 0x0f1f8a, silver: 0xc0c0c0
                     },
                     { // Frozen
-                        gold: 0xB0E0E6, // PowderBlue
-                        green: 0xAFEEEE, // PaleTurquoise (Tree)
-                        red: 0x4682B4, // SteelBlue
-                        blue: 0x00BFFF, // DeepSkyBlue
-                        silver: 0xFFFFFF // White
+                        name: 'frozen',
+                        gold: 0xB0E0E6, green: 0xAFEEEE, red: 0x4682B4, blue: 0x00BFFF, silver: 0xFFFFFF
                     },
                     { // Sakura
-                        gold: 0xFF69B4, // HotPink
-                        green: 0xFFB7C5, // Cherry Blossom Pink (Tree)
-                        red: 0xC71585, // MediumVioletRed
-                        blue: 0xDDA0DD, // Plum
-                        silver: 0xFFF0F5 // LavenderBlush
+                        name: 'sakura',
+                        gold: 0xFF69B4, green: 0xFFB7C5, red: 0xC71585, blue: 0xDDA0DD, silver: 0xFFF0F5
                     },
                     { // Midnight
-                        gold: 0x9370DB, // Medium Purple
-                        green: 0x191970, // Midnight Blue (Tree)
-                        red: 0x4B0082, // Indigo
-                        blue: 0x483D8B, // Dark Slate Blue
-                        silver: 0x708090 // Slate Grey
+                        name: 'midnight',
+                        gold: 0x9370DB, green: 0x191970, red: 0x4B0082, blue: 0x483D8B, silver: 0x708090
+                    },
+                    { // Rainbow
+                        name: 'rainbow',
+                        isRainbow: true
                     }
                 ];
                 
-                const t = themes[Math.floor(Math.random() * themes.length)];
+                // Sequential Switching
+                this.currentThemeIndex = (this.currentThemeIndex + 1) % themes.length;
+                const t = themes[this.currentThemeIndex];
                 
-                const mats = this.materials;
-                if(mats.gold) { mats.gold.color.setHex(t.gold); mats.gold.emissive.setHex(t.gold); }
-                if(mats.goldPhysical) { mats.goldPhysical.color.setHex(t.gold); mats.goldPhysical.emissive.setHex(t.gold); }
-                
-                if(mats.green) { mats.green.color.setHex(t.green); }
-                if(mats.greenPhysical) { mats.greenPhysical.color.setHex(t.green); }
-                
-                if(mats.redPhysical) { mats.redPhysical.color.setHex(t.red); }
-                if(mats.bluePhysical) { mats.bluePhysical.color.setHex(t.blue); }
-                if(mats.silverPhysical) { mats.silverPhysical.color.setHex(t.silver); }
+                if (t.isRainbow) {
+                    this.isRainbowMode = true;
+                    // Initial colorful state
+                    this.materials.gold.color.setHSL(0.0, 1.0, 0.5);
+                    this.materials.green.color.setHSL(0.2, 1.0, 0.5);
+                    this.materials.redPhysical.color.setHSL(0.4, 1.0, 0.5);
+                    this.materials.bluePhysical.color.setHSL(0.6, 1.0, 0.5);
+                    this.materials.silverPhysical.color.setHSL(0.8, 1.0, 0.5);
+                } else {
+                    this.isRainbowMode = false;
+                    const mats = this.materials;
+                    if(mats.gold) { mats.gold.color.setHex(t.gold); mats.gold.emissive.setHex(t.gold); }
+                    if(mats.goldPhysical) { mats.goldPhysical.color.setHex(t.gold); mats.goldPhysical.emissive.setHex(t.gold); }
+                    
+                    if(mats.green) { mats.green.color.setHex(t.green); }
+                    if(mats.greenPhysical) { mats.greenPhysical.color.setHex(t.green); }
+                    
+                    if(mats.redPhysical) { mats.redPhysical.color.setHex(t.red); }
+                    if(mats.bluePhysical) { mats.bluePhysical.color.setHex(t.blue); }
+                    if(mats.silverPhysical) { mats.silverPhysical.color.setHex(t.silver); }
+                }
             }
 
             initManualControls() {
@@ -2156,6 +2176,19 @@
                     mobileMagic.addEventListener('touchstart', handleMagic, {passive: false});
                 }
 
+                // Magic Button (Desktop)
+                const desktopMagic = document.getElementById('btn-magic-desktop');
+                if(desktopMagic) {
+                    desktopMagic.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.switchTheme();
+                        // Add animation class
+                        desktopMagic.classList.remove('pulse');
+                        void desktopMagic.offsetWidth;
+                        desktopMagic.classList.add('pulse');
+                    });
+                }
+
                 window.addEventListener('resize', () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
@@ -2346,6 +2379,19 @@
                 if(this.snowSystem) this.snowSystem.update();
                 this.particles.forEach(p => p.update(STATE.mode, time, this.mainGroup.rotation.y));
                 
+                // Rainbow Mode Animation
+                if (this.isRainbowMode) {
+                    this.rainbowHue += 0.005;
+                    if (this.rainbowHue > 1) this.rainbowHue = 0;
+                    
+                    this.materials.gold.color.setHSL(this.rainbowHue, 1.0, 0.5);
+                    this.materials.gold.emissive.setHSL(this.rainbowHue, 1.0, 0.5);
+                    this.materials.green.color.setHSL((this.rainbowHue + 0.2) % 1, 1.0, 0.5);
+                    this.materials.redPhysical.color.setHSL((this.rainbowHue + 0.4) % 1, 1.0, 0.5);
+                    this.materials.bluePhysical.color.setHSL((this.rainbowHue + 0.6) % 1, 1.0, 0.5);
+                    this.materials.silverPhysical.color.setHSL((this.rainbowHue + 0.8) % 1, 1.0, 0.5);
+                }
+
                 // Process Gestures if active
                 if (this.webcamRunning) {
                     this.processGestures();
