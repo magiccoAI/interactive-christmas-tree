@@ -266,7 +266,7 @@
             border: 1px solid var(--color-gold);
             background: rgba(212, 175, 55, 0.2);
             backdrop-filter: blur(14px);
-            display: none;
+            display: flex; /* Visible on Desktop too */
             align-items: center;
             justify-content: center;
             color: var(--color-cream);
@@ -275,6 +275,11 @@
             z-index: 30;
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
             transition: all 0.3s ease;
+            cursor: pointer; /* Add cursor pointer for desktop */
+        }
+        #mobile-magic-toggle:hover {
+            transform: scale(1.1);
+            background: rgba(212, 175, 55, 0.4);
         }
         #mobile-magic-toggle:active {
             transform: scale(0.9);
@@ -291,10 +296,6 @@
             #mobile-menu-toggle, #mobile-magic-toggle {
                 display: flex;
             }
-            /* Hide desktop magic button on mobile to avoid duplication */
-            #btn-magic-desktop {
-                display: none;
-            }
             .mode-bar {
                 display: flex; /* Visible on Mobile */
                 bottom: 140px; /* Increased from 120px to avoid Restore button overlap */
@@ -308,7 +309,7 @@
             bottom: 100px;
             left: 50%;
             transform: translateX(-50%);
-            display: flex; /* Visible by default (Desktop & Mobile) */
+            display: none; /* Hidden by default (Desktop) */
             gap: 15px;
             pointer-events: auto;
             z-index: 20;
@@ -334,9 +335,7 @@
         
         /* Desktop Magic Button Hidden (Moved to mobile left corner) */
         /* .btn-magic { display: none; } Removed to allow desktop button */
-        #btn-magic-desktop {
-            display: flex; /* Visible in flex container */
-        }
+        /* #btn-magic-desktop { display: flex; } Removed again as we use mobile toggle for both */
 
         .btn-mode:hover {
             background: rgba(212, 175, 55, 0.2);
@@ -398,7 +397,6 @@
             <div class="btn-mode active" data-mode="TREE" title="Tree Mode">🎄</div>
             <div class="btn-mode" data-mode="SCATTER" title="Scatter Mode">✨</div>
             <div class="btn-mode" data-mode="FOCUS" title="Focus Mode">🔍</div>
-            <div class="btn-mode" id="btn-magic-desktop" title="Magic Theme">🪄</div>
         </div>
 
         <div class="upload-wrapper">
@@ -606,10 +604,10 @@
                 this.mesh.position.lerp(this.targetPos, lerpSpeed);
                 
                 // Rotation
-                if (this.isFocused) {
+                if (this.type === 'PHOTO' && mode === MODES.FOCUS) {
                     // Lock rotation to face camera regardless of parent rotation
                     // Parent (mainGroup) rotates around Y. We counter-rotate.
-                    // Target is Math.PI (facing camera).
+                    // This ensures the Gallery UI stays fixed to the screen even if the tree spins.
                     this.mesh.rotation.x = this.targetRot.x;
                     this.mesh.rotation.z = this.targetRot.z;
                     this.mesh.rotation.y = this.targetRot.y - parentRotY;
@@ -633,8 +631,8 @@
                     // We place it at 0, 2, 40 to be close
                     this.targetPos.set(0, 2, 40);
                     
-                    // Rotation: Turn card so textured front (-Z) faces the camera
-                    this.targetRot.set(0, Math.PI, 0);
+                    // Rotation: Turn card so textured front (+Z) faces the camera
+                    this.targetRot.set(0, 0, 0);
                     
                     // Scale: Pop up large!
                     this.targetScale.set(5.5, 5.5, 5.5);
@@ -1828,7 +1826,8 @@
                         if (STATE.mode === MODES.FOCUS) {
                             // In FOCUS mode, ALSO use Left/Right to switch photos (Navigation)
                             const now = performance.now();
-                            if (isRotating && (now - this.lastSwitchTime > 500)) { // 500ms debounce
+                            // Increased debounce to 1500ms (1.5s) to prevent rapid switching
+                            if (isRotating && (now - this.lastSwitchTime > 1500)) { 
                                 if (x < center - deadzone) {
                                     // Move Left -> Previous Photo
                                     STATE.photoIndex--;
@@ -2060,12 +2059,56 @@
 
                 if (newMode === MODES.FOCUS) {
                     if(this.overlayMesh) this.overlayMesh.visible = true;
+                    
+                    // 1. Move Decorations to Background
+                    this.particles.forEach(p => {
+                        if (p.type !== 'PHOTO') {
+                            p.setFocus(false);
+                        }
+                    });
+
+                    // 2. Arrange Photos in Carousel
                     if (this.photos.length > 0) {
                         if (STATE.photoIndex >= this.photos.length) STATE.photoIndex = 0;
                         if (STATE.photoIndex < 0) STATE.photoIndex = this.photos.length - 1;
                         
-                        const targetPhoto = this.photos[STATE.photoIndex];
-                        this.particles.forEach(p => p.setFocus(p === targetPhoto));
+                        const count = this.photos.length;
+                        const radius = 50; 
+                        const angleStep = 0.35; // ~20 degrees
+                        
+                        this.photos.forEach((p, i) => {
+                            // Calculate relative offset (wrapping for shortest path)
+                            let offset = i - STATE.photoIndex;
+                            if (offset > count / 2) offset -= count;
+                            if (offset < -count / 2) offset += count;
+                            
+                            if (offset === 0) {
+                                // Center (Focused)
+                                p.isFocused = true;
+                                p.targetPos.set(0, 2, 40);
+                                p.targetScale.set(5.5, 5.5, 5.5);
+                                p.targetRot.set(0, 0, 0);
+                            } else {
+                                // Side Cards (Carousel)
+                                p.isFocused = false;
+                                
+                                const theta = offset * angleStep;
+                                const x = radius * Math.sin(theta);
+                                const z = 40 - radius * (1 - Math.cos(theta));
+                                
+                                p.targetPos.set(x, 2, z);
+                                // Face slightly inward
+                                p.targetRot.set(0, -theta * 0.9, 0);
+                                
+                                const dist = Math.abs(offset);
+                                const scale = Math.max(0, 4.5 - (dist * 1.0));
+                                p.targetScale.set(scale, scale, scale);
+                                
+                                // Hide if too far
+                                if (dist > 5) p.targetScale.set(0, 0, 0);
+                            }
+                        });
+
                         if (prevMode !== MODES.FOCUS && this.soundManager) {
                             this.soundManager.playFocus();
                         }
@@ -2174,19 +2217,6 @@
                     
                     mobileMagic.addEventListener('click', handleMagic);
                     mobileMagic.addEventListener('touchstart', handleMagic, {passive: false});
-                }
-
-                // Magic Button (Desktop)
-                const desktopMagic = document.getElementById('btn-magic-desktop');
-                if(desktopMagic) {
-                    desktopMagic.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.switchTheme();
-                        // Add animation class
-                        desktopMagic.classList.remove('pulse');
-                        void desktopMagic.offsetWidth;
-                        desktopMagic.classList.add('pulse');
-                    });
                 }
 
                 window.addEventListener('resize', () => {
