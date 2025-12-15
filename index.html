@@ -260,7 +260,7 @@
             .upload-wrapper .btn-upload:first-child {
                 display: none;
             }
-            .hint-text {
+            .hint-text, .privacy-hint {
                 display: none;
             }
             #mobile-menu-toggle {
@@ -283,7 +283,7 @@
             pointer-events: auto;
             z-index: 20;
         }
-        .btn-mode {
+        .btn-mode, .btn-magic {
             background: rgba(0, 0, 0, 0.4);
             backdrop-filter: blur(8px);
             border: 1px solid rgba(212, 175, 55, 0.5);
@@ -295,11 +295,11 @@
             font-size: 20px;
             transition: all 0.3s ease;
         }
-        .btn-mode:hover {
+        .btn-mode:hover, .btn-magic:hover {
             background: rgba(212, 175, 55, 0.2);
             transform: scale(1.1);
         }
-        .btn-mode.active {
+        .btn-mode.active, .btn-magic:active {
             background: var(--color-gold);
             color: #000;
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
@@ -355,11 +355,12 @@
             <div class="btn-mode active" data-mode="TREE" title="Tree Mode">🎄</div>
             <div class="btn-mode" data-mode="SCATTER" title="Scatter Mode">✨</div>
             <div class="btn-mode" data-mode="FOCUS" title="Focus Mode">🔍</div>
+            <div class="btn-magic" id="btn-magic" title="Magic Color">🪄</div>
         </div>
 
         <div class="upload-wrapper">
             <div class="button-group">
-                <button class="btn-upload" onclick="document.getElementById('input-file').click()" data-i18n="addMemories">
+                <button class="btn-upload" id="btn-add-memories" data-i18n="addMemories">
                     Add Memories
                 </button>
                 <button class="btn-upload" id="btn-reset" data-i18n="restoreTree">
@@ -368,8 +369,13 @@
             </div>
             <input type="file" id="input-file" accept="image/*" multiple>
             <div class="hint-text" data-i18n="hintHide">Press 'H' to Hide Controls</div>
-            <div class="privacy-hint" style="font-size: 10px; opacity: 0.6; margin-top: 2px; max-width: 200px;">
-                <span data-i18n="privacyNotice">🔒 Photos stay on your device</span>
+        </div>
+
+        <!-- Privacy Toast (Auto-hiding) -->
+        <div id="privacy-toast" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.85); border:1px solid var(--color-gold); padding:16px 24px; border-radius:30px; color:#fff; z-index:10000; pointer-events:none; backdrop-filter:blur(8px); box-shadow: 0 5px 20px rgba(0,0,0,0.4); text-align:center; min-width: 240px;">
+            <div style="font-size:14px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <span style="font-size:18px;">🔒</span> 
+                <span data-i18n="privacyNotice">Photos stay on your device</span>
             </div>
         </div>
     </div>
@@ -453,7 +459,10 @@
                 gestureOpen: "🖐 Open: Scatter",
                 privacyNotice: "🔒 Photos stay on your device",
                 gestureSwipe: "🖐 Move L/R to Browse Photos",
-                viewGallery: "View Gallery"
+                viewGallery: "View Gallery",
+                magic: "Magic Color",
+                privacyCancel: "Cancel",
+                privacyContinue: "Continue"
             },
             zh: {
                 title: "圣诞快乐",
@@ -484,7 +493,10 @@
                 gestureOpen: "🖐 张开：散落",
                 privacyNotice: "🔒 照片仅在本地处理，不上传云端",
                 gestureSwipe: "🖐 左右移动切换照片",
-                viewGallery: "浏览照片"
+                viewGallery: "浏览照片",
+                magic: "魔法变色",
+                privacyCancel: "取消",
+                privacyContinue: "继续"
             }
         };
 
@@ -544,7 +556,8 @@
 
             update(mode, time, parentRotY = 0) {
                 // Lerp towards target
-                const lerpSpeed = 0.05;
+                // Faster restore speed for Tree mode
+                const lerpSpeed = (mode === MODES.TREE) ? 0.08 : 0.05;
                 
                 this.mesh.position.lerp(this.targetPos, lerpSpeed);
                 
@@ -1192,6 +1205,50 @@
                 this.initManualControls();
             }
 
+            switchTheme() {
+                if(this.soundManager) this.soundManager.playSparkle();
+                
+                const themes = [
+                    { // Classic
+                        gold: 0xffd700, green: 0x004225, red: 0x8a0f0f, blue: 0x0f1f8a, silver: 0xc0c0c0
+                    },
+                    { // Frozen
+                        gold: 0xB0E0E6, // PowderBlue
+                        green: 0xAFEEEE, // PaleTurquoise (Tree)
+                        red: 0x4682B4, // SteelBlue
+                        blue: 0x00BFFF, // DeepSkyBlue
+                        silver: 0xFFFFFF // White
+                    },
+                    { // Sakura
+                        gold: 0xFF69B4, // HotPink
+                        green: 0xFFB7C5, // Cherry Blossom Pink (Tree)
+                        red: 0xC71585, // MediumVioletRed
+                        blue: 0xDDA0DD, // Plum
+                        silver: 0xFFF0F5 // LavenderBlush
+                    },
+                    { // Midnight
+                        gold: 0x9370DB, // Medium Purple
+                        green: 0x191970, // Midnight Blue (Tree)
+                        red: 0x4B0082, // Indigo
+                        blue: 0x483D8B, // Dark Slate Blue
+                        silver: 0x708090 // Slate Grey
+                    }
+                ];
+                
+                const t = themes[Math.floor(Math.random() * themes.length)];
+                
+                const mats = this.materials;
+                if(mats.gold) { mats.gold.color.setHex(t.gold); mats.gold.emissive.setHex(t.gold); }
+                if(mats.goldPhysical) { mats.goldPhysical.color.setHex(t.gold); mats.goldPhysical.emissive.setHex(t.gold); }
+                
+                if(mats.green) { mats.green.color.setHex(t.green); }
+                if(mats.greenPhysical) { mats.greenPhysical.color.setHex(t.green); }
+                
+                if(mats.redPhysical) { mats.redPhysical.color.setHex(t.red); }
+                if(mats.bluePhysical) { mats.bluePhysical.color.setHex(t.blue); }
+                if(mats.silverPhysical) { mats.silverPhysical.color.setHex(t.silver); }
+            }
+
             initManualControls() {
                 // Raycaster for click interaction
                 this.raycaster = new THREE.Raycaster();
@@ -1768,12 +1825,12 @@
                                 // Already in focus, pinch just maintains it
                                 status = I18N[currentLang].gestureSwipe; 
                             }
-                        } else if (tipToWristRatio < 1.3) { 
-                            // Fist: Tips close to wrist (approx 1.0 or less usually, but 1.3 is safe upper bound for loose fist)
+                        } else if (tipToWristRatio < 1.25) { 
+                            // Fist: Tips close to wrist (approx 1.0 or less usually)
                             newMode = MODES.TREE;
                             status = I18N[currentLang].gestureFist;
-                        } else if (tipToWristRatio > 1.7) { 
-                            // Open: Tips far from wrist (approx 2.0+ usually)
+                        } else if (tipToWristRatio > 1.5) { 
+                            // Open: Tips far from wrist (Trigger threshold lowered for better sensitivity)
                             // CONTEXT AWARENESS:
                             // If user is actively rotating (moving hand L/R) and in TREE mode, 
                             // ignore the "Open" gesture because "Open Hand + Move" is a natural rotation gesture.
@@ -2055,6 +2112,40 @@
 
 
                 document.getElementById('input-file').addEventListener('change', (e) => this.handleImageUpload(e));
+
+                // Add Memories Button Logic (Direct + Toast)
+                const btnAddMemories = document.getElementById('btn-add-memories');
+                const inputFile = document.getElementById('input-file');
+                const privacyToast = document.getElementById('privacy-toast');
+
+                if (btnAddMemories) {
+                    btnAddMemories.addEventListener('click', () => {
+                        // 1. Open File Selector Immediately
+                        inputFile.click();
+                        
+                        // 2. Show Privacy Toast
+                        if (privacyToast) {
+                            privacyToast.style.display = 'block';
+                            privacyToast.style.opacity = '0';
+                            privacyToast.style.transition = 'opacity 0.5s ease';
+                            
+                            // Force reflow
+                            void privacyToast.offsetWidth;
+                            privacyToast.style.opacity = '1';
+                            
+                            // Hide after 4 seconds
+                            if(this.toastTimeout) clearTimeout(this.toastTimeout);
+                            this.toastTimeout = setTimeout(() => {
+                                privacyToast.style.opacity = '0';
+                                setTimeout(() => {
+                                    privacyToast.style.display = 'none';
+                                }, 500);
+                            }, 4000);
+                        }
+                        
+                        if(this.soundManager) this.soundManager.playClick();
+                    });
+                }
 
                 // Sound Button
                 const btnSound = document.getElementById('btn-sound');
