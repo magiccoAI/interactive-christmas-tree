@@ -1451,6 +1451,8 @@
                 this.isRainbowMode = false;
                 this.rainbowHue = 0;
                 this.currentThemeIndex = 0; // For sequential switching
+                
+                this.isCameraLoading = false; // Add this
 
                 this.initThree();
                 this.initLights();
@@ -2647,12 +2649,21 @@
                 const gestureStatus = document.getElementById('gesture-status');
                 if (gestureStatus) {
                     gestureStatus.textContent = "Tap here to enable gesture control";
-                    const startGesture = () => {
-                        gestureStatus.textContent = "⌛ Starting Gesture Control...";
+                    const startGesture = async () => {
+                        if (this.webcamRunning || this.isCameraLoading) return;
+                        
+                        this.isCameraLoading = true;
+                        gestureStatus.textContent = I18N[currentLang].gestureLoading;
+                        
                         if(this.soundManager) this.soundManager.resume(); // Resume Audio
-                        this.setupCamera();
-                        gestureStatus.removeEventListener('click', startGesture);
-                        gestureStatus.removeEventListener('touchstart', startGesture);
+                        
+                        try {
+                            await this.setupCamera();
+                        } catch (e) {
+                            console.error(e);
+                        } finally {
+                             this.isCameraLoading = false;
+                        }
                     };
                     gestureStatus.addEventListener('click', startGesture, { passive: true });
                     gestureStatus.addEventListener('touchstart', startGesture, { passive: true });
@@ -2751,9 +2762,11 @@
                      // Or just reset to start message if not running. 
                      // Simplification: If webcam not running, show start message.
                      if(!this.webcamRunning) {
-                         // Note: We lose the "Starting..." state text if we switch lang during start.
-                         // But that's a rare edge case.
-                         gestureStatus.textContent = t.gestureStart;
+                         if (this.isCameraLoading) {
+                             gestureStatus.textContent = t.gestureLoading;
+                         } else {
+                             gestureStatus.textContent = t.gestureStart;
+                         }
                      }
                 }
             }
