@@ -333,10 +333,6 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         
-        /* Desktop Magic Button Hidden (Moved to mobile left corner) */
-        /* .btn-magic { display: none; } Removed to allow desktop button */
-        /* #btn-magic-desktop { display: flex; } Removed again as we use mobile toggle for both */
-
         .btn-mode:hover {
             background: rgba(212, 175, 55, 0.2);
             transform: scale(1.1);
@@ -752,6 +748,47 @@
                 this.masterGain = null;
                 this.bgmNodes = [];
                 this.isBgmPlaying = false;
+                this.reverbBuffer = null;
+
+                // Custom MP3 Support
+                this.bgmAudio = new Audio();
+                this.bgmAudio.loop = true;
+                this.bgmAudio.crossOrigin = "anonymous";
+                this.bgmSource = null;
+                this.usingCustomBGM = false;
+                
+                // Try to load music.mp3
+                this.bgmAudio.src = 'music.mp3';
+                this.bgmAudio.addEventListener('canplaythrough', () => {
+                    console.log('Custom music.mp3 found and ready.');
+                    this.usingCustomBGM = true;
+                });
+                this.bgmAudio.addEventListener('error', () => {
+                    // console.log('Custom music.mp3 not found, using generative BGM.');
+                    this.usingCustomBGM = false;
+                });
+
+                // Custom Scatter Sound Support
+                this.scatterAudio = new Audio();
+                this.scatterAudio.src = 'shine-6-268910.mp3';
+                this.scatterAudio.crossOrigin = "anonymous";
+                this.usingCustomScatter = false;
+                
+                this.scatterAudio.addEventListener('canplaythrough', () => {
+                    console.log('Custom scatter sound found and ready.');
+                    this.usingCustomScatter = true;
+                });
+
+                // Custom Restore Tree Sound Support
+                this.restoreAudio = new Audio();
+                this.restoreAudio.src = 'restoretree-button.mp3';
+                this.restoreAudio.crossOrigin = "anonymous";
+                this.usingCustomRestore = false;
+
+                this.restoreAudio.addEventListener('canplaythrough', () => {
+                    console.log('Custom restore sound found and ready.');
+                    this.usingCustomRestore = true;
+                });
             }
             
             init() {
@@ -762,12 +799,57 @@
                 this.masterGain.connect(this.ctx.destination);
                 this.masterGain.gain.value = 0; // Start at 0 since muted is true
                 
-                // Create Noise Buffer for Sleigh Bells
+                // Create Noise Buffer for Sleigh Bells & Magic
                 const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
                 this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
                 const data = this.noiseBuffer.getChannelData(0);
                 for (let i = 0; i < bufferSize; i++) {
                     data[i] = Math.random() * 2 - 1;
+                }
+
+                // Connect Custom Audio to Web Audio API
+                if (!this.bgmSource) {
+                    try {
+                        this.bgmSource = this.ctx.createMediaElementSource(this.bgmAudio);
+                        
+                        // Add BGM specific gain for volume control
+                        this.bgmGain = this.ctx.createGain();
+                        this.bgmGain.gain.value = 0.25; // Reduced volume (25%) for background
+                        
+                        this.bgmSource.connect(this.bgmGain);
+                        this.bgmGain.connect(this.masterGain);
+                    } catch(e) {
+                        console.warn('Audio Source connection failed:', e);
+                    }
+                }
+
+                // Connect Custom Scatter Audio
+                if (this.scatterAudio && !this.scatterSource) {
+                    try {
+                        this.scatterSource = this.ctx.createMediaElementSource(this.scatterAudio);
+                        this.scatterGain = this.ctx.createGain();
+                        this.scatterGain.gain.value = 0.6; // Slightly softer than max
+                        
+                        this.scatterSource.connect(this.scatterGain);
+                        this.scatterGain.connect(this.masterGain);
+                    } catch(e) {
+                         // Fallback for Safari/Older browsers if MediaElementSource fails
+                         console.warn('Scatter Audio Source connection failed:', e);
+                    }
+                }
+
+                // Connect Custom Restore Audio
+                if (this.restoreAudio && !this.restoreSource) {
+                    try {
+                        this.restoreSource = this.ctx.createMediaElementSource(this.restoreAudio);
+                        this.restoreGain = this.ctx.createGain();
+                        this.restoreGain.gain.value = 0.6; 
+                        
+                        this.restoreSource.connect(this.restoreGain);
+                        this.restoreGain.connect(this.masterGain);
+                    } catch(e) {
+                         console.warn('Restore Audio Source connection failed:', e);
+                    }
                 }
             }
 
@@ -787,7 +869,7 @@
                 this.resume();
                 
                 this.muted = !this.muted;
-                const targetVol = this.muted ? 0 : 0.3;
+                const targetVol = this.muted ? 0 : 0.4;
                 this.masterGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.1);
                 
                 if (!this.muted) {
@@ -800,73 +882,75 @@
                 return this.muted;
             }
 
-            // Sound: Ambient Background (Melodic Christmas Theme)
+            // Sound: Professional Warm Ambient BGM
             startAmbientBGM() {
                 if (this.isBgmPlaying || !this.ctx || this.muted) return;
                 this.isBgmPlaying = true;
                 const now = this.ctx.currentTime;
 
-                // 1. Gentle Wind Background (Subtle)
-                const bufferSize = this.ctx.sampleRate * 4;
-                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                const data = buffer.getChannelData(0);
-                let lastOut = 0;
-                for (let i = 0; i < bufferSize; i++) {
-                    const white = Math.random() * 2 - 1;
-                    data[i] = (lastOut + (0.02 * white)) / 1.02;
-                    lastOut = data[i];
-                    data[i] *= 3.5; 
+                // Priority: Use Custom MP3 if available
+                if (this.usingCustomBGM) {
+                    this.bgmAudio.play().catch(e => console.warn("MP3 Autoplay prevented:", e));
+                    return;
                 }
 
-                const windSource = this.ctx.createBufferSource();
-                windSource.buffer = buffer;
-                windSource.loop = true;
+                // Fallback: Generative BGM
+                // 1. Warm Drone Pad (C Major 7: C3, G3, B3, E4) - "Warmth" Foundation
+                // Using Triangle waves with LowPass filter for analog feel
+                const chordFreqs = [130.81, 196.00, 246.94, 329.63]; 
+                chordFreqs.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    
+                    // Detune slightly for chorus effect (richness)
+                    osc.detune.value = (Math.random() * 10 - 5); 
 
-                const windFilter = this.ctx.createBiquadFilter();
-                windFilter.type = 'lowpass';
-                windFilter.frequency.value = 300; // Lower frequency for warmth
+                    const gain = this.ctx.createGain();
+                    gain.gain.value = 0.02; // Very subtle background
 
-                const windGain = this.ctx.createGain();
-                windGain.gain.value = 0.03; // Very quiet
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 400 + (Math.random() * 200); // Muffled warm tone
 
-                // Breeze modulation
-                const windLFO = this.ctx.createOscillator();
-                windLFO.frequency.value = 0.08;
-                const lfoGain = this.ctx.createGain();
-                lfoGain.gain.value = 100;
-                windLFO.connect(lfoGain);
-                lfoGain.connect(windFilter.frequency);
+                    // LFO for breathing movement
+                    const lfo = this.ctx.createOscillator();
+                    lfo.frequency.value = 0.1 + (Math.random() * 0.1); // Slow breath
+                    const lfoGain = this.ctx.createGain();
+                    lfoGain.gain.value = 50;
+                    lfo.connect(lfoGain);
+                    lfoGain.connect(filter.frequency);
 
-                windSource.connect(windFilter);
-                windFilter.connect(windGain);
-                windGain.connect(this.masterGain);
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.masterGain);
 
-                windSource.start(now);
-                windLFO.start(now);
-                
-                this.bgmNodes.push(windSource, windLFO, windGain, lfoGain, windFilter);
+                    osc.start(now);
+                    lfo.start(now);
+                    
+                    this.bgmNodes.push(osc, gain, filter, lfo, lfoGain);
+                });
 
                 // 2. Music Box Melody Sequencer
                 this.scheduleMelody(now);
 
-                // 3. Rhythmic Sleigh Bells
+                // 3. Gentle Sleigh Bells (Rhythmic texture)
                 this.scheduleSleighBells(now);
             }
 
             scheduleMelody(startTime) {
                 if (!this.isBgmPlaying) return;
                 
-                // Simple "Jingle Bells" Chorus Melody
-                // Notes: E E E, E E E, E G C D E
-                const bpm = 100;
+                // Slower, more spacious arrangement of Jingle Bells
+                const bpm = 80; // Slower tempo for warmth
                 const beat = 60 / bpm;
                 const melody = [
-                    {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 2}, // Jingle Bells
-                    {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 2}, // Jingle Bells
-                    {n: 'E5', d: 1}, {n: 'G5', d: 1}, {n: 'C5', d: 1.5}, {n: 'D5', d: 0.5}, {n: 'E5', d: 4}, // Jingle All The Way
-                    {n: 'F5', d: 1}, {n: 'F5', d: 1}, {n: 'F5', d: 1.5}, {n: 'F5', d: 0.5}, // Oh what fun
-                    {n: 'F5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 1}, // it is to ride
-                    {n: 'E5', d: 1}, {n: 'D5', d: 1}, {n: 'D5', d: 1}, {n: 'E5', d: 1}, {n: 'D5', d: 2}, {n: 'G5', d: 2} // one horse open sleigh
+                    {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 2}, 
+                    {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 2}, 
+                    {n: 'E5', d: 1}, {n: 'G5', d: 1}, {n: 'C5', d: 1.5}, {n: 'D5', d: 0.5}, {n: 'E5', d: 4}, 
+                    {n: 'F5', d: 1}, {n: 'F5', d: 1}, {n: 'F5', d: 1.5}, {n: 'F5', d: 0.5}, 
+                    {n: 'F5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 1}, {n: 'E5', d: 1}, 
+                    {n: 'E5', d: 1}, {n: 'D5', d: 1}, {n: 'D5', d: 1}, {n: 'E5', d: 1}, {n: 'D5', d: 2}, {n: 'G5', d: 2} 
                 ];
 
                 const freqs = { 
@@ -876,40 +960,56 @@
                 let currentTime = startTime;
                 
                 melody.forEach(note => {
-                    this.playMusicBoxNote(freqs[note.n], currentTime, note.d * beat * 0.9);
+                    // Random velocity for human feel
+                    const velocity = 0.6 + Math.random() * 0.4;
+                    this.playMusicBoxNote(freqs[note.n], currentTime, note.d * beat * 0.9, velocity);
                     currentTime += note.d * beat;
                 });
 
-                // Schedule loop
                 const totalDuration = currentTime - startTime;
-                // Add some pause before repeating
-                const loopTime = currentTime + 2; 
+                const loopTime = currentTime + 3; // Longer pause
 
                 this.melodyTimeout = setTimeout(() => {
                     if (this.isBgmPlaying && !this.muted) {
                         this.scheduleMelody(this.ctx.currentTime);
                     }
-                }, (totalDuration + 2) * 1000);
+                }, (totalDuration + 3) * 1000);
             }
 
-            playMusicBoxNote(freq, time, duration) {
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
+            // High Quality Music Box (FM Synthesis + Bell envelope)
+            playMusicBoxNote(freq, time, duration, velocity = 1) {
+                if (this.muted || !this.ctx) return;
                 
-                // Music Box / Celesta tone (Sine with slight overtone)
+                // 1. Carrier (Fundamental)
+                const osc = this.ctx.createOscillator();
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(freq, time);
 
-                // Bell-like Envelope
-                gain.gain.setValueAtTime(0, time);
-                gain.gain.linearRampToValueAtTime(0.15, time + 0.02); // Fast attack
-                gain.gain.exponentialRampToValueAtTime(0.01, time + duration); // Decay
+                // 2. Modulator (Harmonics for "bell" metal sound)
+                const mod = this.ctx.createOscillator();
+                mod.type = 'sine';
+                mod.frequency.setValueAtTime(freq * 2.0, time); // 2nd harmonic dominant
                 
+                const modGain = this.ctx.createGain();
+                modGain.gain.setValueAtTime(freq * 0.5, time); // Modulation index
+                modGain.gain.exponentialRampToValueAtTime(0.01, time + 0.5); // Fast decay of harmonics
+
+                mod.connect(modGain);
+                modGain.connect(osc.frequency);
+
+                // 3. Amplitude Envelope
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.15 * velocity, time + 0.02); // Soft attack
+                gain.gain.exponentialRampToValueAtTime(0.001, time + duration + 1.0); // Long ringing tail
+
                 osc.connect(gain);
                 gain.connect(this.masterGain);
-                
+
                 osc.start(time);
-                osc.stop(time + duration + 0.1);
+                mod.start(time);
+                osc.stop(time + duration + 1.5);
+                mod.stop(time + duration + 1.5);
             }
 
             scheduleSleighBells(startTime) {
@@ -957,6 +1057,11 @@
             }
 
             stopAmbientBGM() {
+                // Stop MP3
+                if (this.bgmAudio) {
+                    this.bgmAudio.pause();
+                }
+
                 this.bgmNodes.forEach(node => {
                     try {
                         if (node.stop) node.stop();
@@ -979,7 +1084,7 @@
                 osc.frequency.setValueAtTime(freq, startTime);
                 
                 gain.gain.setValueAtTime(0, startTime);
-                gain.gain.linearRampToValueAtTime(vol, startTime + 0.05);
+                gain.gain.linearRampToValueAtTime(vol, startTime + 0.02); // Faster attack
                 gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
                 
                 osc.connect(gain);
@@ -989,10 +1094,130 @@
                 osc.stop(startTime + duration);
             }
             
-            // Sound: Click (UI Feedback)
+            // Sound: Modern UI Click (Apple-style "Pop")
             playClick() {
                 if (this.muted || !this.ctx) return;
-                this.playOscillator(800, 'sine', this.ctx.currentTime, 0.1, 0.1);
+                const now = this.ctx.currentTime;
+                
+                // 1. High frequency transient (click)
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = this.noiseBuffer;
+                const noiseFilter = this.ctx.createBiquadFilter();
+                noiseFilter.type = 'highpass';
+                noiseFilter.frequency.value = 10000;
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.05, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+                
+                noise.connect(noiseFilter);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(this.masterGain);
+                noise.start(now);
+                noise.stop(now + 0.05);
+
+                // 2. Tonal Body (The "Pop")
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+                
+                const oscGain = this.ctx.createGain();
+                oscGain.gain.setValueAtTime(0, now);
+                oscGain.gain.linearRampToValueAtTime(0.15, now + 0.01);
+                oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                
+                osc.connect(oscGain);
+                oscGain.connect(this.masterGain);
+                
+                osc.start(now);
+                osc.stop(now + 0.15);
+            }
+
+            // Sound: Magic Wand / Sparkle
+            playMagicSound() {
+                this.resume();
+                if (this.muted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                
+                // Use Custom Scatter Sound if available
+                if (this.usingCustomScatter) {
+                    this.scatterAudio.currentTime = 0; // Rewind
+                    this.scatterAudio.play().catch(e => console.warn("Scatter play prevented:", e));
+                    return;
+                }
+
+                // 1. Ascending Sparkles (Pentatonic Arpeggio)
+                const notes = [523.25, 659.25, 783.99, 987.77, 1046.50, 1318.51, 1567.98]; // C5 to G6
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        
+                        const gain = this.ctx.createGain();
+                        gain.gain.setValueAtTime(0, now + i*0.04);
+                        gain.gain.linearRampToValueAtTime(0.1, now + i*0.04 + 0.05);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + i*0.04 + 0.4);
+                        
+                        osc.connect(gain);
+                        gain.connect(this.masterGain);
+                        
+                        osc.start(now + i*0.04);
+                        osc.stop(now + i*0.04 + 0.4);
+                    }, 0); 
+                });
+
+                // 2. Magical Swoosh (Filtered Noise Sweep)
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = this.noiseBuffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.Q.value = 10;
+                filter.frequency.setValueAtTime(400, now);
+                filter.frequency.exponentialRampToValueAtTime(3000, now + 0.6); // Sweep up
+
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0, now);
+                noiseGain.gain.linearRampToValueAtTime(0.1, now + 0.3);
+                noiseGain.gain.linearRampToValueAtTime(0, now + 0.8);
+
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(this.masterGain);
+                noise.start(now);
+                noise.stop(now + 0.8);
+
+                // 3. Shiny High-Pitch Glissando
+                const gliss = this.ctx.createOscillator();
+                gliss.type = 'triangle';
+                gliss.frequency.setValueAtTime(800, now);
+                gliss.frequency.linearRampToValueAtTime(2000, now + 0.5);
+                
+                const glissGain = this.ctx.createGain();
+                glissGain.gain.setValueAtTime(0, now);
+                glissGain.gain.linearRampToValueAtTime(0.05, now + 0.1);
+                glissGain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+                gliss.connect(glissGain);
+                glissGain.connect(this.masterGain);
+                gliss.start(now);
+                gliss.stop(now + 0.5);
+            }
+
+            // Sound: Restore Tree / Reset
+            playRestoreSound() {
+                this.resume();
+                if (this.muted || !this.ctx) return;
+                
+                // Use Custom Restore Sound if available
+                if (this.usingCustomRestore) {
+                    this.restoreAudio.currentTime = 0; // Rewind
+                    this.restoreAudio.play().catch(e => console.warn("Restore play prevented:", e));
+                    return;
+                }
+                
+                // Fallback to Jingle Melody if custom sound not ready
+                this.playJingleMelody();
             }
 
             // Sound: Sleigh Bells (Christmas Atmosphere)
@@ -1252,27 +1477,32 @@
             }
 
             switchTheme() {
-                if(this.soundManager) this.soundManager.playSparkle();
+                if(this.soundManager) this.soundManager.playMagicSound();
                 
                 const themes = [
                     { // Classic
                         name: 'classic',
+                        bg: '#000000',
                         gold: 0xffd700, green: 0x004225, red: 0x8a0f0f, blue: 0x0f1f8a, silver: 0xc0c0c0
                     },
                     { // Frozen
                         name: 'frozen',
+                        bg: '#FFFFFF',
                         gold: 0xB0E0E6, green: 0xAFEEEE, red: 0x4682B4, blue: 0x00BFFF, silver: 0xFFFFFF
                     },
                     { // Sakura
                         name: 'sakura',
-                        gold: 0xFF69B4, green: 0xFFB7C5, red: 0xC71585, blue: 0xDDA0DD, silver: 0xFFF0F5
+                        bg: '#FFFFFF',
+                        gold: 0xFF69B4, green: 0xFFB7C5, red: 0xC71585, blue: 0xDDA0DD, silver: 0xFFFFFF
                     },
                     { // Midnight
                         name: 'midnight',
-                        gold: 0x9370DB, green: 0x191970, red: 0x4B0082, blue: 0x483D8B, silver: 0x708090
+                        bg: '#FFFFFF',
+                        gold: 0x9370DB, green: 0x191970, red: 0x4B0082, blue: 0x483D8B, silver: 0xFFFFFF
                     },
                     { // Rainbow
                         name: 'rainbow',
+                        bg: '#FFFFFF',
                         isRainbow: true
                     }
                 ];
@@ -1280,6 +1510,9 @@
                 // Sequential Switching
                 this.currentThemeIndex = (this.currentThemeIndex + 1) % themes.length;
                 const t = themes[this.currentThemeIndex];
+
+                // Set background color
+                document.body.style.backgroundColor = t.bg;
                 
                 if (t.isRainbow) {
                     this.isRainbowMode = true;
@@ -2316,7 +2549,7 @@
 
                 document.getElementById('btn-reset').addEventListener('click', () => {
                     this.updateLayout(MODES.TREE);
-                    if(this.soundManager) this.soundManager.playJingleMelody();
+                    if(this.soundManager) this.soundManager.playRestoreSound();
                 });
                 
                 window.addEventListener('keydown', (e) => {
