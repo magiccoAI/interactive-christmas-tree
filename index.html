@@ -1479,7 +1479,7 @@
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
                 this.renderer.setPixelRatio(window.devicePixelRatio);
                 this.renderer.toneMapping = THREE.ReinhardToneMapping;
-                this.renderer.toneMappingExposure = 1.5; // Increased for mobile visibility
+                this.renderer.toneMappingExposure = 1.2; // Reduced from 2.5 for clearer view
                 this.container.appendChild(this.renderer.domElement);
 
                 const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
@@ -1711,45 +1711,83 @@
             }
 
             initLights() {
-                // 1. Stronger Ambient for Mobile Visibility
-                const ambient = new THREE.AmbientLight(0xffffff, 0.4); 
-                this.scene.add(ambient);
+                // Mobile detection
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-                // 2. Brighter Hemisphere
-                const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x0f0e0d, 0.4); 
-                this.scene.add(hemiLight);
+                if (isMobile) {
+                    // --- Mobile Optimized Lighting (Brighter, less reliance on reflections) ---
+                    const ambient = new THREE.AmbientLight(0xffffff, 0.3); 
+                    this.scene.add(ambient);
 
-                // 3. Main Directional Light (Sun-like) - Crucial for definition without EnvMap
-                const mainDir = new THREE.DirectionalLight(0xfffaed, 2.0);
-                mainDir.position.set(20, 50, 20);
-                this.scene.add(mainDir);
+                    const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x0f0e0d, 0.4); 
+                    this.scene.add(hemiLight);
 
-                // 4. Inner Tree Glow
-                const innerLight = new THREE.PointLight(0xffaa00, 5, 60); 
-                this.mainGroup.add(innerLight);
+                    // Directional Light is ESSENTIAL for mobile WebGL where EnvMap might fail or be low-res
+                    const mainDir = new THREE.DirectionalLight(0xfffaed, 1.5);
+                    mainDir.position.set(20, 50, 20);
+                    this.scene.add(mainDir);
 
-                // 5. Spotlights (Restored Intensity)
-                const spotGold = new THREE.SpotLight(CONFIG.colors.gold, 1500); 
-                spotGold.position.set(40, 60, 40);
-                spotGold.angle = 0.6;
-                spotGold.penumbra = 1;
-                spotGold.decay = 2;
-                spotGold.distance = 200;
-                this.scene.add(spotGold);
+                    // Stronger point/spot lights for mobile to ensure "glitter"
+                    const innerLight = new THREE.PointLight(0xffaa00, 4, 60); 
+                    this.mainGroup.add(innerLight);
 
-                const spotBlue = new THREE.SpotLight(CONFIG.colors.blue, 1000); 
-                spotBlue.position.set(-40, 30, -40);
-                spotBlue.angle = 0.6;
-                spotBlue.penumbra = 1;
-                spotBlue.decay = 2;
-                spotBlue.distance = 200;
-                this.scene.add(spotBlue);
+                    const spotGold = new THREE.SpotLight(CONFIG.colors.gold, 1500); 
+                    spotGold.position.set(40, 60, 40);
+                    spotGold.angle = 0.6;
+                    spotGold.penumbra = 1;
+                    spotGold.decay = 2;
+                    spotGold.distance = 200;
+                    this.scene.add(spotGold);
 
-                const rimLight = new THREE.SpotLight(0xffffff, 1000); 
-                rimLight.position.set(0, 50, -50);
-                rimLight.lookAt(0, 0, 0);
-                rimLight.penumbra = 1;
-                this.scene.add(rimLight);
+                    const spotBlue = new THREE.SpotLight(CONFIG.colors.blue, 1000); 
+                    spotBlue.position.set(-40, 30, -40);
+                    spotBlue.angle = 0.6;
+                    spotBlue.penumbra = 1;
+                    spotBlue.decay = 2;
+                    spotBlue.distance = 200;
+                    this.scene.add(spotBlue);
+
+                    const rimLight = new THREE.SpotLight(0xffffff, 1000); 
+                    rimLight.position.set(0, 50, -50);
+                    rimLight.lookAt(0, 0, 0);
+                    rimLight.penumbra = 1;
+                    this.scene.add(rimLight);
+
+                } else {
+                    // --- Desktop / Standard Lighting (Atmospheric, Moody) ---
+                    const ambient = new THREE.AmbientLight(0xffffff, 0.05); // Very subtle
+                    this.scene.add(ambient);
+
+                    const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x0f0e0d, 0.2);
+                    this.scene.add(hemiLight);
+
+                    // No Directional Light on Desktop - rely on PMREM Environment Map for realism
+
+                    const innerLight = new THREE.PointLight(0xffaa00, 2, 60);
+                    this.mainGroup.add(innerLight);
+
+                    const spotGold = new THREE.SpotLight(CONFIG.colors.gold, 500);
+                    spotGold.position.set(40, 60, 40);
+                    spotGold.angle = 0.6;
+                    spotGold.penumbra = 1;
+                    spotGold.decay = 2;
+                    spotGold.distance = 200;
+                    this.scene.add(spotGold);
+
+                    const spotBlue = new THREE.SpotLight(CONFIG.colors.blue, 300);
+                    spotBlue.position.set(-40, 30, -40);
+                    spotBlue.angle = 0.6;
+                    spotBlue.penumbra = 1;
+                    spotBlue.decay = 2;
+                    spotBlue.distance = 200;
+                    this.scene.add(spotBlue);
+
+                    const rimLight = new THREE.SpotLight(0xffffff, 400);
+                    rimLight.position.set(0, 50, -50);
+                    rimLight.lookAt(0, 0, 0);
+                    rimLight.penumbra = 1;
+                    this.scene.add(rimLight);
+                }
             }
 
             initPostProcessing() {
@@ -1763,6 +1801,8 @@
             }
 
             createMaterials() {
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
                 // Glow Texture for Dust
                 const canvas = document.createElement('canvas');
                 canvas.width = 32; canvas.height = 32;
@@ -1777,76 +1817,76 @@
                 this.materials = {
                     gold: new THREE.MeshStandardMaterial({
                         color: CONFIG.colors.gold,
-                        roughness: 0.2, // Slightly rougher for better light catch
-                        metalness: 0.8, // Reduced from 0.9 for better diffuse lighting
+                        roughness: 0.1,
+                        metalness: 0.9,
                         emissive: CONFIG.colors.gold,
-                        emissiveIntensity: 0.2 // Increased glow
+                        emissiveIntensity: 0.1
                     }),
                     snowWhite: new THREE.MeshStandardMaterial({
                         color: 0xffffff,
                         roughness: 0.4,
                         metalness: 0.1,
                         emissive: 0x666666,
-                        emissiveIntensity: 0.3 // Increased
+                        emissiveIntensity: 0.2
                     }),
                     green: new THREE.MeshStandardMaterial({
                         color: CONFIG.colors.green,
                         roughness: 0.3,
                         metalness: 0.3,
                         emissive: 0x002200,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: 0.1
                     }),
                     greenPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.green,
-                        metalness: 0.6, // Reduced
+                        metalness: isMobile ? 0.6 : 0.7,
                         roughness: 0.25,
                         clearcoat: 0.8,
                         clearcoatRoughness: 0.25,
                         emissive: 0x002200,
-                        emissiveIntensity: 0.15
+                        emissiveIntensity: isMobile ? 0.15 : 0.08
                     }),
                     bluePhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.blue,
-                        metalness: 0.7, // Reduced
+                        metalness: isMobile ? 0.7 : 0.8,
                         roughness: 0.25,
                         clearcoat: 0.8,
                         clearcoatRoughness: 0.25,
                         emissive: 0x000044,
-                        emissiveIntensity: 0.25
+                        emissiveIntensity: isMobile ? 0.25 : 0.15
                     }),
                     redPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.red,
-                        metalness: 0.65, // Reduced
+                        metalness: isMobile ? 0.65 : 0.75,
                         roughness: 0.28,
                         clearcoat: 0.8,
                         clearcoatRoughness: 0.3,
                         emissive: 0x330000,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: isMobile ? 0.2 : 0.1
                     }),
                     goldPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.gold,
-                        metalness: 0.8,
+                        metalness: isMobile ? 0.8 : 0.9,
                         roughness: 0.28,
                         clearcoat: 0.9,
                         clearcoatRoughness: 0.3,
                         emissive: CONFIG.colors.gold,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: isMobile ? 0.2 : 0.06
                     }),
                     silverPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.silver,
-                        metalness: 0.8,
+                        metalness: isMobile ? 0.8 : 0.9,
                         roughness: 0.3,
                         clearcoat: 0.9,
                         emissive: 0x111111,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: isMobile ? 0.2 : 0.08
                     }),
                     ribbon: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.gold,
-                        metalness: 0.8,
+                        metalness: isMobile ? 0.8 : 0.9,
                         roughness: 0.28,
                         clearcoat: 0.9,
                         emissive: 0x111111,
-                        emissiveIntensity: 0.2
+                        emissiveIntensity: isMobile ? 0.2 : 0.1
                     }),
                     candy: new THREE.MeshStandardMaterial({
                         map: this.createCandyTexture(),
