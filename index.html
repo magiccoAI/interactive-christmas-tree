@@ -2124,11 +2124,43 @@
                         runningMode: "VIDEO",
                         numHands: 1
                     });
+                    
+                    // Add this check
+                    if (!this.handLandmarker) {
+                         throw new Error("HandLandmarker created but is null");
+                    }
+
                     document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
                     if(this.soundManager) this.soundManager.playSuccess();
                 } catch (e) {
                     console.error("MediaPipe failed:", e);
+                    // Fallback to CPU if GPU fails
+                    if (e.message && (e.message.includes("GPU") || e.message.includes("WebGL"))) {
+                         console.warn("GPU init failed, retrying with CPU...");
+                         try {
+                            const vision = await FilesetResolver.forVisionTasks(
+                                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                            );
+                             this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                                baseOptions: {
+                                    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+                                    delegate: "CPU"
+                                },
+                                runningMode: "VIDEO",
+                                numHands: 1
+                            });
+                            document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
+                            if(this.soundManager) this.soundManager.playSuccess();
+                            return; // Success on retry
+                         } catch(e2) {
+                             console.error("MediaPipe CPU fallback failed:", e2);
+                         }
+                    }
+                    
                     document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIFailed;
+                    // Reset state so user can try again
+                    this.webcamRunning = false;
+                    this.isCameraLoading = false; 
                 }
             }
 
