@@ -350,8 +350,8 @@
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
         }
     }
     </script>
@@ -429,7 +429,7 @@
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
         // Import MediaPipe directly from CDN with full path to verify loading
-        import { FilesetResolver, HandLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm';
+        import { FilesetResolver, HandLandmarker } from 'https://esm.sh/@mediapipe/tasks-vision@0.10.3';
 
         // --- Configuration ---
         const CONFIG = {
@@ -529,7 +529,7 @@
                 gesturePinch: "👌 捏合：聚焦",
                 gestureFist: "✊ 握拳：重置",
                 gestureOpen: "🖐 张开：散落",
-                privacyNotice: "🔒 照片仅在本地处理，不上传云端",
+                privacyNotice: "照片仅在本地处理，不上传云端",
                 gestureSwipe: "🖐 左右移动切换照片",
                 viewGallery: "浏览照片",
                 magic: "魔法变色",
@@ -788,6 +788,28 @@
                 this.restoreAudio.addEventListener('canplaythrough', () => {
                     console.log('Custom restore sound found and ready.');
                     this.usingCustomRestore = true;
+                });
+
+                // Custom Shifting Sound Support
+                this.shiftingAudio = new Audio();
+                this.shiftingAudio.src = 'shifting-effect.mp3';
+                this.shiftingAudio.crossOrigin = "anonymous";
+                this.usingCustomShifting = false;
+                
+                this.shiftingAudio.addEventListener('canplaythrough', () => {
+                    console.log('Custom shifting sound found and ready.');
+                    this.usingCustomShifting = true;
+                });
+
+                // Custom Spreading Sound Support
+                this.spreadingAudio = new Audio();
+                this.spreadingAudio.src = 'spreading-effect.mp3';
+                this.spreadingAudio.crossOrigin = "anonymous";
+                this.usingCustomSpreading = false;
+                
+                this.spreadingAudio.addEventListener('canplaythrough', () => {
+                    console.log('Custom spreading sound found and ready.');
+                    this.usingCustomSpreading = true;
                 });
             }
             
@@ -1222,7 +1244,17 @@
 
             // Sound: Sleigh Bells (Christmas Atmosphere)
             playSleighBells() {
+                this.resume();
                 if (this.muted || !this.ctx) return;
+
+                // Use Custom Shifting Sound if available
+                if (this.usingCustomShifting) {
+                    this.shiftingAudio.currentTime = 0; // Rewind
+                    this.shiftingAudio.play().catch(e => console.warn("Shifting play prevented:", e));
+                    return;
+                }
+
+                // Fallback to synthesized sound if custom sound not ready
                 const now = this.ctx.currentTime;
                 // Play multiple instances of filtered noise slightly offset
                 for(let i=0; i<6; i++) {
@@ -1271,6 +1303,14 @@
             playSparkle() {
                 this.resume();
                 if (this.muted) return;
+                
+                // Use Custom Spreading Sound if available
+                if (this.usingCustomSpreading) {
+                    this.spreadingAudio.currentTime = 0; // Rewind
+                    this.spreadingAudio.play().catch(e => console.warn("Spreading play prevented:", e));
+                    return;
+                }
+
                 const now = this.ctx.currentTime;
                 // Play a cascade of high pitched sine waves
                 for(let i=0; i<8; i++) {
@@ -1989,7 +2029,7 @@
 
                 try {
                     const vision = await FilesetResolver.forVisionTasks(
-                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                        "https://unpkg.com/@mediapipe/tasks-vision@0.10.3/wasm"
                     );
                     this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
                         baseOptions: {
