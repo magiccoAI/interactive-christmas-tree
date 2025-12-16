@@ -794,6 +794,7 @@
                 this.shiftingAudio = new Audio();
                 this.shiftingAudio.src = 'shifting-effect.mp3';
                 this.shiftingAudio.crossOrigin = "anonymous";
+                this.shiftingAudio.volume = 0.5;
                 this.usingCustomShifting = false;
                 
                 this.shiftingAudio.addEventListener('canplaythrough', () => {
