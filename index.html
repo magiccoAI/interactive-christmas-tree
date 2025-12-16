@@ -1523,27 +1523,37 @@
                     { // Classic
                         name: 'classic',
                         bg: '#000000',
-                        gold: 0xffd700, green: 0x004225, red: 0x8a0f0f, blue: 0x0f1f8a, silver: 0xc0c0c0
+                        gold: 0xffd700, green: 0x004225, red: 0x8a0f0f, blue: 0x0f1f8a, silver: 0xc0c0c0,
+                        ribbon: 0xffd700,
+                        ribbonEmissive: 0xffd700
                     },
                     { // Frozen
                         name: 'frozen',
                         bg: '#FFFFFF',
-                        gold: 0xB0E0E6, green: 0xAFEEEE, red: 0x4682B4, blue: 0x00BFFF, silver: 0xFFFFFF
+                        gold: 0xB0E0E6, green: 0xAFEEEE, red: 0x4682B4, blue: 0x00BFFF, silver: 0xFFFFFF,
+                        ribbon: 0xFFFFFF,
+                        ribbonEmissive: 0x222222
                     },
                     { // Sakura
                         name: 'sakura',
                         bg: '#FFFFFF',
-                        gold: 0xFF69B4, green: 0xFFB7C5, red: 0xC71585, blue: 0xDDA0DD, silver: 0xFFFFFF
+                        gold: 0xFF69B4, green: 0xFFB7C5, red: 0xC71585, blue: 0xDDA0DD, silver: 0xFFFFFF,
+                        ribbon: 0xFFFFFF,
+                        ribbonEmissive: 0x222222
                     },
                     { // Midnight
                         name: 'midnight',
                         bg: '#FFFFFF',
-                        gold: 0x9370DB, green: 0x191970, red: 0x4B0082, blue: 0x483D8B, silver: 0xFFFFFF
+                        gold: 0x9370DB, green: 0x191970, red: 0x4B0082, blue: 0x483D8B, silver: 0xFFFFFF,
+                        ribbon: 0xFFFFFF,
+                        ribbonEmissive: 0x222222
                     },
                     { // Rainbow
                         name: 'rainbow',
                         bg: '#FFFFFF',
-                        isRainbow: true
+                        isRainbow: true,
+                        ribbon: 0xFFFFFF,
+                        ribbonEmissive: 0x222222
                     }
                 ];
                 
@@ -1562,6 +1572,11 @@
                     this.materials.redPhysical.color.setHSL(0.4, 1.0, 0.5);
                     this.materials.bluePhysical.color.setHSL(0.6, 1.0, 0.5);
                     this.materials.silverPhysical.color.setHSL(0.8, 1.0, 0.5);
+                    // Ensure ribbon is white in Rainbow mode
+                    if(this.materials.ribbon) { 
+                        this.materials.ribbon.color.setHex(0xffffff);
+                        this.materials.ribbon.emissive.setHex(0x222222);
+                    }
                 } else {
                     this.isRainbowMode = false;
                     const mats = this.materials;
@@ -1574,6 +1589,10 @@
                     if(mats.redPhysical) { mats.redPhysical.color.setHex(t.red); }
                     if(mats.bluePhysical) { mats.bluePhysical.color.setHex(t.blue); }
                     if(mats.silverPhysical) { mats.silverPhysical.color.setHex(t.silver); }
+                    if(mats.ribbon) { 
+                        mats.ribbon.color.setHex(t.ribbon || 0xffffff); 
+                        mats.ribbon.emissive.setHex(t.ribbonEmissive || 0x222222); 
+                    }
                 }
             }
 
@@ -1805,6 +1824,14 @@
                         emissive: 0x111111,
                         emissiveIntensity: 0.08
                     }),
+                    ribbon: new THREE.MeshPhysicalMaterial({
+                        color: CONFIG.colors.gold,
+                        metalness: 0.9,
+                        roughness: 0.28,
+                        clearcoat: 0.9,
+                        emissive: 0x111111,
+                        emissiveIntensity: 0.1
+                    }),
                     candy: new THREE.MeshStandardMaterial({
                         map: this.createCandyTexture(),
                         roughness: 0.4
@@ -1956,7 +1983,7 @@
                 
                 // 2. Ribbon Particles
                 for(let i=0; i < 400; i++) {
-                    const mesh = new THREE.Mesh(geometries.ribbon, this.materials.goldPhysical);
+                    const mesh = new THREE.Mesh(geometries.ribbon, this.materials.ribbon);
                     this.mainGroup.add(mesh);
                     const p = new Particle(mesh, 'RIBBON');
                     p.updateTargets(MODES.TREE, i, 400); // Pass specific idx/total for ribbon
