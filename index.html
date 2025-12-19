@@ -13,8 +13,8 @@
 
     <!-- Optimization: Preload AI Models & DNS Prefetch -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="prefetch" href="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm/vision_wasm_internal.wasm" as="fetch" crossorigin>
-    <link rel="prefetch" href="https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" as="fetch" crossorigin>
+    <!-- <link rel="prefetch" href="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm/vision_wasm_internal.wasm" as="fetch" crossorigin> -->
+    <!-- <link rel="prefetch" href="https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" as="fetch" crossorigin> -->
 
     <style>
         :root {
@@ -30,6 +30,7 @@
             font-family: 'Times New Roman', serif;
             color: var(--color-cream);
             user-select: none;
+            touch-action: none;
         }
 
         /* --- UI Overlay --- */
@@ -497,6 +498,7 @@
                 gestureCameraUsed: "Camera is used by another app. Close it and refresh.",
                 gestureCameraBlocked: "Camera permission blocked. Please allow access in browser settings.",
                 gestureCameraError: "Camera error. Check settings or try another browser.",
+                gestureMobileUnsupported: "Gesture control not supported on mobile",
                 gestureMove: "🖐 Move Hand L/R to Spin",
                 gesturePinch: "👌 Pinch: Focus",
                 gestureFist: "✊ Fist: Restore Tree",
@@ -531,6 +533,7 @@
                 gestureCameraUsed: "摄像头被其他应用占用，请关闭后刷新。",
                 gestureCameraBlocked: "摄像头权限被拒绝，请在浏览器设置中允许。",
                 gestureCameraError: "摄像头错误，请检查设置或更换浏览器。",
+                gestureMobileUnsupported: "移动端暂不支持手势控制",
                 gestureMove: "🖐 左右移动手掌旋转",
                 gesturePinch: "👌 捏合：聚焦",
                 gestureFist: "✊ 握拳：重置",
@@ -1442,6 +1445,7 @@
         class ChristmasExperience {
             constructor() {
                 this.container = document.body;
+                this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 this.particles = [];
                 this.photos = [];
                 this.defaultPhoto = null;
@@ -1454,14 +1458,18 @@
                 
                 this.isCameraLoading = false; // Add this
 
-                this.initThree();
-                this.initLights();
-                this.initPostProcessing();
-                this.createMaterials();
-                this.createStarfield(); // Add stars
-                this.generateContent();
-                this.initSnow();
-                this.soundManager = new SoundManager(); // Init Sound
+                try {
+                    this.initThree();
+                    this.initLights();
+                    this.initPostProcessing();
+                    this.createMaterials();
+                    this.createStarfield(); // Add stars
+                    this.generateContent();
+                    this.initSnow();
+                    this.soundManager = new SoundManager(); // Init Sound
+                } catch (e) {
+                    console.error("Initialization error:", e);
+                }
                 this.initEvents();
                 // this.initMediaPipe(); // Removed auto-init to wait for user interaction or camera ready
                 
@@ -1713,10 +1721,7 @@
             }
 
             initLights() {
-                // Mobile detection
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-                if (isMobile) {
+                if (this.isMobile) {
                     // --- Mobile Optimized Lighting (Brighter, less reliance on reflections) ---
                     const ambient = new THREE.AmbientLight(0xffffff, 0.3); 
                     this.scene.add(ambient);
@@ -1803,8 +1808,6 @@
             }
 
             createMaterials() {
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                
                 // Glow Texture for Dust
                 const canvas = document.createElement('canvas');
                 canvas.width = 32; canvas.height = 32;
@@ -1840,55 +1843,55 @@
                     }),
                     greenPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.green,
-                        metalness: isMobile ? 0.6 : 0.7,
+                        metalness: this.isMobile ? 0.6 : 0.7,
                         roughness: 0.25,
                         clearcoat: 0.8,
                         clearcoatRoughness: 0.25,
                         emissive: 0x002200,
-                        emissiveIntensity: isMobile ? 0.15 : 0.08
+                        emissiveIntensity: this.isMobile ? 0.15 : 0.08
                     }),
                     bluePhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.blue,
-                        metalness: isMobile ? 0.7 : 0.8,
+                        metalness: this.isMobile ? 0.7 : 0.8,
                         roughness: 0.25,
                         clearcoat: 0.8,
                         clearcoatRoughness: 0.25,
                         emissive: 0x000044,
-                        emissiveIntensity: isMobile ? 0.25 : 0.15
+                        emissiveIntensity: this.isMobile ? 0.25 : 0.15
                     }),
                     redPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.red,
-                        metalness: isMobile ? 0.65 : 0.75,
+                        metalness: this.isMobile ? 0.65 : 0.75,
                         roughness: 0.28,
                         clearcoat: 0.8,
                         clearcoatRoughness: 0.3,
                         emissive: 0x330000,
-                        emissiveIntensity: isMobile ? 0.2 : 0.1
+                        emissiveIntensity: this.isMobile ? 0.2 : 0.1
                     }),
                     goldPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.gold,
-                        metalness: isMobile ? 0.8 : 0.9,
+                        metalness: this.isMobile ? 0.8 : 0.9,
                         roughness: 0.28,
                         clearcoat: 0.9,
                         clearcoatRoughness: 0.3,
                         emissive: CONFIG.colors.gold,
-                        emissiveIntensity: isMobile ? 0.2 : 0.06
+                        emissiveIntensity: this.isMobile ? 0.2 : 0.06
                     }),
                     silverPhysical: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.silver,
-                        metalness: isMobile ? 0.8 : 0.9,
+                        metalness: this.isMobile ? 0.8 : 0.9,
                         roughness: 0.3,
                         clearcoat: 0.9,
                         emissive: 0x111111,
-                        emissiveIntensity: isMobile ? 0.2 : 0.08
+                        emissiveIntensity: this.isMobile ? 0.2 : 0.08
                     }),
                     ribbon: new THREE.MeshPhysicalMaterial({
                         color: CONFIG.colors.gold,
-                        metalness: isMobile ? 0.8 : 0.9,
+                        metalness: this.isMobile ? 0.8 : 0.9,
                         roughness: 0.28,
                         clearcoat: 0.9,
                         emissive: 0x111111,
-                        emissiveIntensity: isMobile ? 0.2 : 0.1
+                        emissiveIntensity: this.isMobile ? 0.2 : 0.1
                     }),
                     candy: new THREE.MeshStandardMaterial({
                         map: this.createCandyTexture(),
@@ -2079,7 +2082,15 @@
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia(constraints);
                     video.srcObject = stream;
-                    video.addEventListener('loadeddata', () => { 
+                    
+                    // Play immediately to trigger loading
+                    const playPromise = video.play();
+                    if (playPromise && playPromise.catch) {
+                        playPromise.catch(() => {});
+                    }
+
+                    video.onloadeddata = () => { 
+                        if (this.webcamRunning) return; // Prevent double trigger
                         this.webcamRunning = true; 
                         const statusEl = document.getElementById('gesture-status');
                         if (statusEl) statusEl.textContent = I18N[currentLang].gestureCameraActive;
@@ -2088,12 +2099,8 @@
                             canvas.width = video.videoWidth || 320;
                             canvas.height = video.videoHeight || 240;
                         }
-                        const playPromise = video.play();
-                        if (playPromise && playPromise.catch) {
-                            playPromise.catch(() => {});
-                        }
-                        this.initMediaPipe();
-                    });
+                        this.initMediaPipeWithTimeout();
+                    };
                 } catch (err) { 
                     console.warn("Webcam access denied", err); 
                     const statusEl = document.getElementById('gesture-status');
@@ -2109,58 +2116,94 @@
                 }
             }
 
-            async initMediaPipe() {
-                if (this.handLandmarker) return;
+
+            async initMediaPipeWithTimeout() {
+                // Mobile Optimization: Use CPU for stability, or handle timeout gracefully
+                if (this.handLandmarker || this._mediaPipeInitializing) return;
+
+                this._mediaPipeInitializing = true;
+
+                // Longer timeout for mobile (network might be slow)
+                const timeoutMs = this.isMobile ? 20000 : 10000; 
+
+
+                const withTimeout = (promise, label) => {
+                    return Promise.race([
+                        promise,
+                        new Promise((_, reject) => {
+                            setTimeout(() => reject(new Error(label + " timeout")), timeoutMs);
+                        })
+                    ]);
+                };
+
+                const createHandLandmarker = async (delegate) => {
+                    const vision = await withTimeout(
+                        FilesetResolver.forVisionTasks(
+                            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                        ),
+                        "MediaPipe vision loader"
+                    );
+
+                    const handLandmarker = await withTimeout(
+                        HandLandmarker.createFromOptions(vision, {
+                            baseOptions: {
+                                modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+                                delegate: delegate
+                            },
+                            runningMode: "VIDEO",
+                            numHands: 1
+                        }),
+                        "MediaPipe model loader"
+                    );
+
+                    if (!handLandmarker) {
+                        throw new Error("HandLandmarker created but is null");
+                    }
+
+                    return handLandmarker;
+                };
 
                 try {
-                    const vision = await FilesetResolver.forVisionTasks(
-                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-                    );
-                    this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                            delegate: "GPU"
-                        },
-                        runningMode: "VIDEO",
-                        numHands: 1
-                    });
+                    // Mobile strategy: Try GPU first, but maybe with safer config? 
+                    // Actually, modern phones have decent GPUs. Let's try GPU first.
+                    this.handLandmarker = await createHandLandmarker("GPU");
+                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
+                    if (this.soundManager) this.soundManager.playSuccess();
+                } catch (e) {
+                    console.error("MediaPipe GPU failed:", e);
+
+                    let cpuSuccess = false;
+                    document.getElementById('gesture-status').textContent = "⚠️ GPU failed, trying CPU...";
                     
-                    // Add this check
-                    if (!this.handLandmarker) {
-                         throw new Error("HandLandmarker created but is null");
+                    // Give UI a moment to update
+                    await new Promise(r => setTimeout(r, 100));
+
+                    try {
+                        this.handLandmarker = await createHandLandmarker("CPU");
+                        document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
+                        if (this.soundManager) this.soundManager.playSuccess();
+                        cpuSuccess = true;
+                    } catch (e2) {
+                        console.error("MediaPipe CPU fallback failed:", e2);
                     }
 
-                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
-                    if(this.soundManager) this.soundManager.playSuccess();
-                } catch (e) {
-                    console.error("MediaPipe failed:", e);
-                    // Fallback to CPU if GPU fails
-                    if (e.message && (e.message.includes("GPU") || e.message.includes("WebGL"))) {
-                         console.warn("GPU init failed, retrying with CPU...");
-                         try {
-                            const vision = await FilesetResolver.forVisionTasks(
-                                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-                            );
-                             this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                                baseOptions: {
-                                    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                                    delegate: "CPU"
-                                },
-                                runningMode: "VIDEO",
-                                numHands: 1
-                            });
-                            document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
-                            if(this.soundManager) this.soundManager.playSuccess();
-                            return; // Success on retry
-                         } catch(e2) {
-                             console.error("MediaPipe CPU fallback failed:", e2);
-                         }
+                    if (!cpuSuccess) {
+                        const statusEl = document.getElementById('gesture-status');
+                        if (statusEl) statusEl.textContent = "AI Failed. Network/Device Issue.";
+
+                        this.webcamRunning = false;
+                        this.isCameraLoading = false;
+
+
+                        const video = document.getElementById('webcam');
+                        if (video && video.srcObject) {
+                            const tracks = video.srcObject.getTracks ? video.srcObject.getTracks() : [];
+                            tracks.forEach(t => t.stop());
+                            video.srcObject = null;
+                        }
                     }
-                    
-                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIFailed;
-                    // Reset state so user can try again
-                    this.webcamRunning = false;
-                    this.isCameraLoading = false; 
+                } finally {
+                    this._mediaPipeInitializing = false;
                 }
             }
 
@@ -2835,7 +2878,22 @@
             }
         }
 
-        window.app = new ChristmasExperience();
+        // Safety fallback: Ensure loader is removed even if app crashes
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('loader');
+                if (loader) {
+                     loader.style.opacity = '0';
+                     setTimeout(() => loader.remove(), 800);
+                }
+            }, 3000);
+        });
+
+        try {
+            window.app = new ChristmasExperience();
+        } catch (e) {
+            console.error("Critical Application Error:", e);
+        }
 
     </script>
 </body>
