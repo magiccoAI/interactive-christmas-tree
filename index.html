@@ -15,7 +15,17 @@
     </noscript>
 
     <!-- Optimization: Preload AI Models & DNS Prefetch -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    
+    <!-- Optimization: Module Preload to fix Network Dependency Chain -->
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js">
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/Pass.js">
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js">
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js">
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/MaskPass.js">
+
     <!-- <link rel="prefetch" href="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm/vision_wasm_internal.wasm" as="fetch" crossorigin> -->
     <!-- <link rel="prefetch" href="https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" as="fetch" crossorigin> -->
 
@@ -604,11 +614,16 @@
                 this.updateTargets(MODES.TREE, 0); 
             }
 
-            update(mode, time, parentRotY = 0) {
+            update(mode, time, parentRotY = 0, isMobile = false) {
                 // Lerp towards target
                 // Faster restore speed for Tree mode
-                const lerpSpeed = (mode === MODES.TREE) ? 0.08 : 0.05;
+                let lerpSpeed = (mode === MODES.TREE) ? 0.08 : 0.05;
                 
+                // Desktop Optimization: Faster response
+                if (!isMobile) {
+                    lerpSpeed *= 1.5;
+                }
+
                 this.mesh.position.lerp(this.targetPos, lerpSpeed);
                 
                 // Rotation
@@ -765,7 +780,7 @@
                 // Custom MP3 Support
                 this.bgmAudio = new Audio();
                 this.bgmAudio.loop = true;
-                this.bgmAudio.crossOrigin = "anonymous";
+                // this.bgmAudio.crossOrigin = "anonymous"; // Removed: Not needed for same-origin files
                 this.bgmSource = null;
                 this.usingCustomBGM = false;
                 
@@ -783,7 +798,7 @@
                 // Custom Scatter Sound Support
                 this.scatterAudio = new Audio();
                 this.scatterAudio.src = 'shine_v2.mp3';
-                this.scatterAudio.crossOrigin = "anonymous";
+                // this.scatterAudio.crossOrigin = "anonymous";
                 this.usingCustomScatter = false;
                 
                 this.scatterAudio.addEventListener('canplaythrough', () => {
@@ -794,7 +809,7 @@
                 // Custom Restore Tree Sound Support
                 this.restoreAudio = new Audio();
                 this.restoreAudio.src = 'restore_v2.mp3';
-                this.restoreAudio.crossOrigin = "anonymous";
+                // this.restoreAudio.crossOrigin = "anonymous";
                 this.usingCustomRestore = false;
 
                 this.restoreAudio.addEventListener('canplaythrough', () => {
@@ -805,7 +820,7 @@
                 // Custom Shifting Sound Support
                 this.shiftingAudio = new Audio();
                 this.shiftingAudio.src = 'shifting_v2.mp3';
-                this.shiftingAudio.crossOrigin = "anonymous";
+                // this.shiftingAudio.crossOrigin = "anonymous";
                 this.shiftingAudio.volume = 0.5;
                 this.usingCustomShifting = false;
                 
@@ -817,7 +832,7 @@
                 // Custom Spreading Sound Support
                 this.spreadingAudio = new Audio();
                 this.spreadingAudio.src = 'spreading_v2.mp3';
-                this.spreadingAudio.crossOrigin = "anonymous";
+                // this.spreadingAudio.crossOrigin = "anonymous";
                 this.usingCustomSpreading = false;
                 
                 this.spreadingAudio.addEventListener('canplaythrough', () => {
@@ -2603,7 +2618,9 @@
                         y: y - previousMousePosition.y
                     };
                     
-                    this.mainGroup.rotation.y += deltaMove.x * 0.005;
+                    // Desktop Optimization: More responsive rotation
+                    const sensitivity = this.isMobile ? 0.005 : 0.008;
+                    this.mainGroup.rotation.y += deltaMove.x * sensitivity;
                     // Optional: Tilt
                     // this.mainGroup.rotation.x += deltaMove.y * 0.005;
                     
@@ -2863,7 +2880,7 @@
                 const time = this.clock.getElapsedTime();
                 
                 if(this.snowSystem) this.snowSystem.update();
-                this.particles.forEach(p => p.update(STATE.mode, time, this.mainGroup.rotation.y));
+                this.particles.forEach(p => p.update(STATE.mode, time, this.mainGroup.rotation.y, this.isMobile));
                 
                 // Rainbow Mode Animation
                 if (this.isRainbowMode) {
