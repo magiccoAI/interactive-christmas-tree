@@ -2124,8 +2124,7 @@
                 this._mediaPipeInitializing = true;
 
                 // Longer timeout for mobile (network might be slow)
-                const timeoutMs = this.isMobile ? 20000 : 10000; 
-
+                const timeoutMs = this.isMobile ? 45000 : 15000; 
 
                 const withTimeout = (promise, label) => {
                     return Promise.race([
@@ -2137,6 +2136,10 @@
                 };
 
                 const createHandLandmarker = async (delegate) => {
+                    // Update status for user feedback
+                    const statusEl = document.getElementById('gesture-status');
+                    if (statusEl) statusEl.textContent = `⌛ Loading AI (${delegate})...`;
+
                     const vision = await withTimeout(
                         FilesetResolver.forVisionTasks(
                             "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
@@ -2164,43 +2167,49 @@
                 };
 
                 try {
-                    // Mobile strategy: Try GPU first, but maybe with safer config? 
-                    // Actually, modern phones have decent GPUs. Let's try GPU first.
-                    this.handLandmarker = await createHandLandmarker("GPU");
-                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
-                    if (this.soundManager) this.soundManager.playSuccess();
-                } catch (e) {
-                    console.error("MediaPipe GPU failed:", e);
-
-                    let cpuSuccess = false;
-                    document.getElementById('gesture-status').textContent = "⚠️ GPU failed, trying CPU...";
+                    // Mobile strategy: Prefer CPU for stability (GPU often fails/hangs on mobile browsers)
+                    // Desktop: Try GPU first for performance
+                    const preferredDelegate = this.isMobile ? "CPU" : "GPU";
                     
-                    // Give UI a moment to update
-                    await new Promise(r => setTimeout(r, 100));
-
                     try {
-                        this.handLandmarker = await createHandLandmarker("CPU");
-                        document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
-                        if (this.soundManager) this.soundManager.playSuccess();
-                        cpuSuccess = true;
-                    } catch (e2) {
-                        console.error("MediaPipe CPU fallback failed:", e2);
+                        this.handLandmarker = await createHandLandmarker(preferredDelegate);
+                    } catch (e) {
+                        console.error(`MediaPipe ${preferredDelegate} failed:`, e);
+                        
+                        // If we started with GPU and it failed, try CPU fallback
+                        if (preferredDelegate === "GPU") {
+                             document.getElementById('gesture-status').textContent = "⚠️ GPU failed, trying CPU...";
+                             await new Promise(r => setTimeout(r, 100)); // UI refresh
+                             this.handLandmarker = await createHandLandmarker("CPU");
+                        } else {
+                            throw e; // CPU failed (or was preferred), nothing else to try
+                        }
                     }
 
-                    if (!cpuSuccess) {
-                        const statusEl = document.getElementById('gesture-status');
-                        if (statusEl) statusEl.textContent = "AI Failed. Network/Device Issue.";
+                    // Success
+                    document.getElementById('gesture-status').textContent = I18N[currentLang].gestureAIReady;
+                    if (this.soundManager) this.soundManager.playSuccess();
 
-                        this.webcamRunning = false;
-                        this.isCameraLoading = false;
-
-
-                        const video = document.getElementById('webcam');
-                        if (video && video.srcObject) {
-                            const tracks = video.srcObject.getTracks ? video.srcObject.getTracks() : [];
-                            tracks.forEach(t => t.stop());
-                            video.srcObject = null;
+                } catch (e) {
+                    console.error("MediaPipe Fatal Error:", e);
+                    const statusEl = document.getElementById('gesture-status');
+                    
+                    if (statusEl) {
+                        if (e.message && e.message.includes('timeout')) {
+                             statusEl.textContent = "AI Load Timeout. Slow Network?";
+                        } else {
+                             statusEl.textContent = "AI Failed. Device/Network Issue.";
                         }
+                    }
+
+                    this.webcamRunning = false;
+                    this.isCameraLoading = false;
+
+                    const video = document.getElementById('webcam');
+                    if (video && video.srcObject) {
+                        const tracks = video.srcObject.getTracks ? video.srcObject.getTracks() : [];
+                        tracks.forEach(t => t.stop());
+                        video.srcObject = null;
                     }
                 } finally {
                     this._mediaPipeInitializing = false;
